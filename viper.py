@@ -25,10 +25,14 @@ class TextWindow():
 
         # File menu 
         file_menu = Menu(self.menu_bar, tearoff=0)
-        file_menu.add_command(label="New", underline=1, command=self.file_new, accelerator="Ctrl+N")
-        file_menu.add_command(label="Open...", underline=1, command=self.file_open, accelerator="Ctrl+O")
-        file_menu.add_command(label="Save", underline=1, command=self.file_save, accelerator="Ctrl+S")
-        file_menu.add_command(label="Save As...", underline=5, command=self.file_save_as, accelerator="Ctrl+Alt+S")
+        file_menu.add_command(label="New File", underline=1, command=self.file_new, accelerator="Ctrl+N")
+        file_menu.add_command(label="New Project", underline=1, command=self.project_new)
+        file_menu.add_command(label="Open File", underline=1, command=self.file_open, accelerator="Ctrl+O")
+        file_menu.add_command(label="Open Project", underline=1, command=self.project_open)
+        file_menu.add_command(label="Save File", underline=1, command=self.file_save, accelerator="Ctrl+S")
+        file_menu.add_command(label="Save Project", underline=1, command=self.project_save)
+        file_menu.add_command(label="Save File As...", underline=5, command=self.file_save_as, accelerator="Ctrl+Alt+S")
+        file_menu.add_command(label="Save Project As...", underline=5, command=self.project_save_as)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", underline=2, command=self.file_quit, accelerator="Alt+F4")
         self.menu_bar.add_cascade(label="File", underline=0, menu=file_menu)       
@@ -89,8 +93,33 @@ class TextWindow():
             self.file_path = None
             self.set_title()
             
+    # NEEDS WORK!!! **************************************
+    def project_new(self, event=None):
+        result = self.save_if_modified()
+        # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
+        if result != None:
+            self.editor.delete(1.0, "end")
+            self.editor.edit_modified(False)
+            self.editor.edit_reset()
+            self.file_path = None
+            self.set_title()
 
     def file_open(self, event=None, file_path=None):
+        result = self.save_if_modified()
+        # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
+        if result != None: 
+            if file_path == None:
+                file_path = filedialog.askopenfilename()
+            if file_path != None  and file_path != '':
+                with open(file_path, encoding="utf-8") as file:
+                    fileContents = file.read()
+                # Set current text to file contents
+                self.editor.delete(1.0, "end")
+                self.editor.insert(1.0, fileContents)
+                self.editor.edit_modified(False)
+                self.file_path = file_path
+
+    def project_open(self, event=None, file_path=None):
         result = self.save_if_modified()
         # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
         if result != None: 
@@ -112,7 +141,29 @@ class TextWindow():
             result = self.file_save_as(file_path=self.file_path)
         return result
 
+    def project_save(self, event=None):
+        if self.file_path == None:
+            result = self.file_save_as()
+        else:
+            result = self.file_save_as(file_path=self.file_path)
+        return result
+
     def file_save_as(self, event=None, file_path=None):
+        if file_path == None:
+            file_path = filedialog.asksaveasfilename(filetypes=(('Text files', '*.txt'), ('Python files', '*.py *.pyw'), ('All files', '*.*'))) #defaultextension='.txt'
+        try:
+            with open(file_path, 'wb') as file:
+                text = self.editor.get(1.0, "end-1c")
+                file.write(bytes(text, 'UTF-8'))
+                self.editor.edit_modified(False)
+                self.file_path = file_path
+                self.set_title()
+                return "saved"
+        except FileNotFoundError:
+            print('FileNotFoundError')
+            return "cancelled"
+
+    def project_save_as(self, event=None, file_path=None):
         if file_path == None:
             file_path = filedialog.asksaveasfilename(filetypes=(('Text files', '*.txt'), ('Python files', '*.py *.pyw'), ('All files', '*.*'))) #defaultextension='.txt'
         try:
