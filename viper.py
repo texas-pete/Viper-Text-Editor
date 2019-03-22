@@ -1,18 +1,27 @@
+import tkinter as tk
+from tkinter import *
 from tkinter import Tk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage
 import os, subprocess, json, string
 
 class TextWindow():
     def __init__(self, root):
+        #*args, **kwargs
         self.root = root        
         self.TITLE = "Viper"
         self.file_path = None
+        #tk.Canvas.__init__(self, *args, **kwargs)    
+        #self.__line_numbers_canvas = __line_numbers_canvas
         self.set_title()
-        
+        #self.__update_line_numbers(__line_numbers_canvas)
+
         frame = Frame(root)
+        # self.__line_numbers_canvas = Canvas(frame, width=30, bg='#555555', 
+        #     highlightbackground='#555555', highlightthickness=0)
+        # self.__line_numbers_canvas.pack(side=LEFT, fill=Y)
         self.y_scroll_bar = Scrollbar(frame, orient="vertical")
         self.editor = Text(frame, yscrollcommand=self.y_scroll_bar.set)
         self.editor.pack(side="left", fill="both", expand=1)
-        self.editor.config( wrap = "word", undo = True, width = 80 )        
+        self.editor.config(wrap="word", undo=True, width=80)        
         self.editor.focus()
         self.y_scroll_bar.pack(side="right", fill="y")
         self.y_scroll_bar.config(command=self.editor.yview)        
@@ -20,19 +29,18 @@ class TextWindow():
 
         root.protocol("WM_DELETE_WINDOW", self.file_quit) 
 
+
         # Create a top level menu
         self.menu_bar = Menu(root)
 
         # File menu 
         file_menu = Menu(self.menu_bar, tearoff=0)
         file_menu.add_command(label="New File", underline=1, command=self.file_new, accelerator="Ctrl+N")
-        file_menu.add_command(label="New Project", underline=1, command=self.project_new)
         file_menu.add_command(label="Open File", underline=1, command=self.file_open, accelerator="Ctrl+O")
         file_menu.add_command(label="Open Project", underline=1, command=self.project_open)
         file_menu.add_command(label="Save File", underline=1, command=self.file_save, accelerator="Ctrl+S")
-        file_menu.add_command(label="Save Project", underline=1, command=self.project_save)
         file_menu.add_command(label="Save File As...", underline=5, command=self.file_save_as, accelerator="Ctrl+Alt+S")
-        file_menu.add_command(label="Save Project As...", underline=5, command=self.project_save_as)
+        file_menu.add_command(label="Save Project", underline=1, command=self.project_save)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", underline=2, command=self.file_quit, accelerator="Alt+F4")
         self.menu_bar.add_cascade(label="File", underline=0, menu=file_menu)       
@@ -67,6 +75,22 @@ class TextWindow():
         root.config(menu=self.menu_bar)
 
 
+    # def __update_line_numbers(self, *args):
+    #     self.delete("all")
+    #     i = self.__line_numbers_canvas.index('@0,0')
+    #     self.__line_numbers_canvas.update()                    
+    #     while True:
+    #         dline = self.__line_numbers_canvas.dlineinfo(i)
+    #         if dline:
+    #             y = dline[1]
+    #             line_number = str(i).split(".")[0]
+    #             # i[0]
+    #             self.create_text(1, y, anchor="nw", text=line_number, fill='#ffffff')
+    #             i = self.__line_numbers_canvas.index('{0}+1line'.format(i))
+    #         else:
+    #             break
+    #     self.after(30, self.__update_line_numbers)
+
     def save_if_modified(self, event=None):
         if self.editor.edit_modified(): 
             response = messagebox.askyesnocancel("Save?", "This document has been modified. Do you want to save changes?")
@@ -92,17 +116,7 @@ class TextWindow():
             self.editor.edit_reset()
             self.file_path = None
             self.set_title()
-            
-    # NEEDS WORK!!! **************************************
-    def project_new(self, event=None):
-        result = self.save_if_modified()
-        # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
-        if result != None:
-            self.editor.delete(1.0, "end")
-            self.editor.edit_modified(False)
-            self.editor.edit_reset()
-            self.file_path = None
-            self.set_title()
+            self.__update_line_numbers()
 
     def file_open(self, event=None, file_path=None):
         result = self.save_if_modified()
@@ -149,21 +163,6 @@ class TextWindow():
         return result
 
     def file_save_as(self, event=None, file_path=None):
-        if file_path == None:
-            file_path = filedialog.asksaveasfilename(filetypes=(('Text files', '*.txt'), ('Python files', '*.py *.pyw'), ('All files', '*.*'))) #defaultextension='.txt'
-        try:
-            with open(file_path, 'wb') as file:
-                text = self.editor.get(1.0, "end-1c")
-                file.write(bytes(text, 'UTF-8'))
-                self.editor.edit_modified(False)
-                self.file_path = file_path
-                self.set_title()
-                return "saved"
-        except FileNotFoundError:
-            print('FileNotFoundError')
-            return "cancelled"
-
-    def project_save_as(self, event=None, file_path=None):
         if file_path == None:
             file_path = filedialog.asksaveasfilename(filetypes=(('Text files', '*.txt'), ('Python files', '*.py *.pyw'), ('All files', '*.*'))) #defaultextension='.txt'
         try:
