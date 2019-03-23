@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import *
-from tkinter import Tk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage
+from tkinter import Tk, ttk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage
 import os, subprocess, json, string
 
 current_font = "arial"
@@ -13,6 +13,7 @@ class TextWindow(tk.Frame):
         self.file_path = None
         tk.Frame.__init__(self, *args, **kwargs)
         self.set_title()
+        self.tabControl = ttk.Notebook(root)
 
         # Frame for the Text Window
         frame = Frame(root)
@@ -27,6 +28,7 @@ class TextWindow(tk.Frame):
         self.vsb.pack(side="right", fill="y")
         self.linenumbers.pack(side="left", fill="y")
         self.text.pack(side="right", fill="both", expand=True)
+        self.tabControl.pack(anchor='nw', expand=1, fill="both")
 
 
 
@@ -49,6 +51,7 @@ class TextWindow(tk.Frame):
         file_menu.add_command(label="Save File As...", underline=5, command=self.file_save_as, accelerator="Ctrl+Alt+S")
         file_menu.add_command(label="Save Project", underline=1, command=self.project_save)
         file_menu.add_separator()
+        file_menu.add_command(label="Close Current Tab", underline=1, command=self.close_tab)
         file_menu.add_command(label="Exit", underline=2, command=self.file_quit, accelerator="Alt+F4")
         self.menu_bar.add_cascade(label="File", underline=0, menu=file_menu)
 
@@ -122,12 +125,19 @@ class TextWindow(tk.Frame):
         self.menu_bar.add_cascade(label="Go To", underline=1)
 
         # Help menu
-        help_menu = Menu(self.menu_bar, tearoff=0)
-        help_menu.add_command(label="Help", underline=1)
-        self.menu_bar.add_cascade(label="Help", underline=1)
+        help_menu = Menu(self.menu_bar, tearoff=0, )
+        help_menu.add_command(label="Help", underline=1, command=self.help_pop)
+        help_menu.add_command(label="About", underline=1, command=self.about_pop)
+        self.menu_bar.add_cascade(label="Help", underline=1, menu=help_menu)
 
         # Display the menu
         root.config(menu=self.menu_bar)
+
+    def help_pop(self, event=None):
+        messagebox.showinfo("Help","Hotkeys:\n\n Ctrl O: Open file \n\n Ctrl S: Save file \n\n Ctrl Y: Redo \n\n Ctrl Z: Undo ")
+
+    def about_pop(self, event=None):
+        messagebox.showinfo("About us","Team name: Bits and Pieces \n\n Members: \n Daniel Merlino \n Jose Duarte \n Stephen Lederer \n Travis Pete")
 
     def font_helvetica(self, event=None):
         self.text.config(font=("Helvetica", current_size))
@@ -293,6 +303,10 @@ class TextWindow(tk.Frame):
             self.text.edit_reset()
             self.file_path = None
             self.set_title()
+            tab1 = ttk.Frame(self.tabControl)  # Create a tab
+            self.tabControl.add(tab1, text='New Tab')  # Add the tab
+            return tab1
+
 
     def file_open(self, event=None, file_path=None):
         result = self.save_if_modified()
@@ -378,6 +392,9 @@ class TextWindow(tk.Frame):
             self.text.edit_redo()
         except:
             print("There is nothing to redo...")
+
+    def close_tab(self):
+        self.tabControl.destroy()
 
             # def main(self, event=None):
         # self.text.bind("<Control-o>", self.file_open)
