@@ -3,32 +3,32 @@ from tkinter import *
 from tkinter import Tk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage
 import os, subprocess, json, string
 
-class TextWindow():
-    def __init__(self, root):
-        #*args, **kwargs
+class TextWindow(tk.Frame):
+    def __init__(self, root, *args, **kwargs):
         self.root = root        
         self.TITLE = "Viper"
         self.file_path = None
-        #tk.Canvas.__init__(self, *args, **kwargs)    
-        #self.__line_numbers_canvas = __line_numbers_canvas
+        tk.Frame.__init__(self, *args, **kwargs)    
         self.set_title()
-        #self.__update_line_numbers(__line_numbers_canvas)
 
+        # Frame for the Text Window
         frame = Frame(root)
-        # self.__line_numbers_canvas = Canvas(frame, width=30, bg='#555555', 
-        #     highlightbackground='#555555', highlightthickness=0)
-        # self.__line_numbers_canvas.pack(side=LEFT, fill=Y)
-        self.y_scroll_bar = Scrollbar(frame, orient="vertical")
-        self.editor = Text(frame, yscrollcommand=self.y_scroll_bar.set)
-        self.editor.pack(side="left", fill="both", expand=1)
-        self.editor.config(wrap="word", undo=True, width=80)        
-        self.editor.focus()
-        self.y_scroll_bar.pack(side="right", fill="y")
-        self.y_scroll_bar.config(command=self.editor.yview)        
-        frame.pack(fill="both", expand=1)
+        self.text = CustomText(self)
+        self.vsb = tk.Scrollbar(orient="vertical", command=self.text.yview)
+        self.text.configure(yscrollcommand=self.vsb.set)
+        self.text.tag_configure("bigfont", font=("Helvetica", "24", "bold"))
+        self.linenumbers = TextLineNumbers(self, width=30)
+        self.linenumbers.attach(self.text)
+        self.vsb.pack(side="right", fill="y")
+        self.linenumbers.pack(side="left", fill="y")
+        self.text.pack(side="right", fill="both", expand=True)
 
+        # Bindings and Hot Key Bindings
+        self.text.bind("<<Change>>", self._on_change)
+        self.text.bind("<Configure>", self._on_change)
+
+        # Closes the application
         root.protocol("WM_DELETE_WINDOW", self.file_quit) 
-
 
         # Create a top level menu
         self.menu_bar = Menu(root)
@@ -74,25 +74,8 @@ class TextWindow():
         # Display the menu
         root.config(menu=self.menu_bar)
 
-
-    # def __update_line_numbers(self, *args):
-    #     self.delete("all")
-    #     i = self.__line_numbers_canvas.index('@0,0')
-    #     self.__line_numbers_canvas.update()                    
-    #     while True:
-    #         dline = self.__line_numbers_canvas.dlineinfo(i)
-    #         if dline:
-    #             y = dline[1]
-    #             line_number = str(i).split(".")[0]
-    #             # i[0]
-    #             self.create_text(1, y, anchor="nw", text=line_number, fill='#ffffff')
-    #             i = self.__line_numbers_canvas.index('{0}+1line'.format(i))
-    #         else:
-    #             break
-    #     self.after(30, self.__update_line_numbers)
-
     def save_if_modified(self, event=None):
-        if self.editor.edit_modified(): 
+        if self.text.edit_modified(): 
             response = messagebox.askyesnocancel("Save?", "This document has been modified. Do you want to save changes?")
             if response: #yes/save
                 result = self.file_save()
@@ -111,12 +94,11 @@ class TextWindow():
         result = self.save_if_modified()
         # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
         if result != None:
-            self.editor.delete(1.0, "end")
-            self.editor.edit_modified(False)
-            self.editor.edit_reset()
+            self.text.delete(1.0, "end")
+            self.text.edit_modified(False)
+            self.text.edit_reset()
             self.file_path = None
             self.set_title()
-            self.__update_line_numbers()
 
     def file_open(self, event=None, file_path=None):
         result = self.save_if_modified()
@@ -128,9 +110,9 @@ class TextWindow():
                 with open(file_path, encoding="utf-8") as file:
                     fileContents = file.read()
                 # Set current text to file contents
-                self.editor.delete(1.0, "end")
-                self.editor.insert(1.0, fileContents)
-                self.editor.edit_modified(False)
+                self.text.delete(1.0, "end")
+                self.text.insert(1.0, fileContents)
+                self.text.edit_modified(False)
                 self.file_path = file_path
 
     def project_open(self, event=None, file_path=None):
@@ -143,9 +125,9 @@ class TextWindow():
                 with open(file_path, encoding="utf-8") as file:
                     fileContents = file.read()
                 # Set current text to file contents
-                self.editor.delete(1.0, "end")
-                self.editor.insert(1.0, fileContents)
-                self.editor.edit_modified(False)
+                self.text.delete(1.0, "end")
+                self.text.insert(1.0, fileContents)
+                self.text.edit_modified(False)
                 self.file_path = file_path
 
     def file_save(self, event=None):
@@ -167,9 +149,9 @@ class TextWindow():
             file_path = filedialog.asksaveasfilename(filetypes=(('Text files', '*.txt'), ('Python files', '*.py *.pyw'), ('All files', '*.*'))) #defaultextension='.txt'
         try:
             with open(file_path, 'wb') as file:
-                text = self.editor.get(1.0, "end-1c")
+                text = self.text.get(1.0, "end-1c")
                 file.write(bytes(text, 'UTF-8'))
-                self.editor.edit_modified(False)
+                self.text.edit_modified(False)
                 self.file_path = file_path
                 self.set_title()
                 return "saved"
@@ -192,34 +174,86 @@ class TextWindow():
         
     def undo(self, event=None):
         try:
-            self.editor.edit_undo()
+            self.text.edit_undo()
         except:
-            print("There is nothing to undo...") 
+            print("There is nothing to undo...")
         
     def redo(self, event=None):
         try:    
-            self.editor.edit_redo()   
+            self.text.edit_redo()   
         except:
-            print("There is nothing to redo...")    
+            print("There is nothing to redo...")   
+
+    # def main(self, event=None):          
+        # self.text.bind("<Control-o>", self.file_open)
+        # self.text.bind("<Control-O>", self.file_open)
+        # self.text.bind("<Control-S>", self.file_save)
+        # self.text.bind("<Control-s>", self.file_save)
+        # self.text.bind("<Control-y>", self.redo)
+        # self.text.bind("<Control-Y>", self.redo)
+        # self.text.bind("<Control-Z>", self.undo)
+        # self.text.bind("<Control-z>", self.undo)
+
+    def _on_change(self, event):
+        self.linenumbers.redraw()
 
 
-    def main(self, event=None):          
-        self.editor.bind("<Control-o>", self.file_open)
-        self.editor.bind("<Control-O>", self.file_open)
-        self.editor.bind("<Control-S>", self.file_save)
-        self.editor.bind("<Control-s>", self.file_save)
-        self.editor.bind("<Control-y>", self.redo)
-        self.editor.bind("<Control-Y>", self.redo)
-        self.editor.bind("<Control-Z>", self.undo)
-        self.editor.bind("<Control-z>", self.undo)
+class TextLineNumbers(tk.Canvas):
+    def __init__(self, *args, **kwargs):
+        tk.Canvas.__init__(self, *args, **kwargs)
+        self.__line_numbers = None
+
+    def attach(self, __line_numbers):
+        self.__line_numbers = __line_numbers
+
+    def redraw(self, *args):
+        # Re-draw line numbers
+        self.delete("all")
+
+        i = self.__line_numbers.index("@0,0")
+        while True :
+            dline= self.__line_numbers.dlineinfo(i)
+            if dline is None: break
+            y = dline[1]
+            line_num = str(i).split(".")[0]
+            self.create_text(2,y,anchor="nw", text=line_num)
+            i = self.__line_numbers.index("%s+1line" % i)
 
         
+class CustomText(tk.Text):
+    def __init__(self, *args, **kwargs):
+        tk.Text.__init__(self, *args, **kwargs)
+
+        # create a proxy for the underlying widget
+        self._orig = self._w + "_orig"
+        self.tk.call("rename", self._w, self._orig)
+        self.tk.createcommand(self._w, self._proxy)
+
+    def _proxy(self, *args):
+        # let the actual widget perform the requested action
+        cmd = (self._orig,) + args
+        result = self.tk.call(cmd)
+
+        # generate an event if something was added or deleted,
+        # or the cursor position changed
+        if (args[0] in ("insert", "replace", "delete") or 
+            args[0:3] == ("mark", "set", "insert") or
+            args[0:2] == ("xview", "moveto") or
+            args[0:2] == ("xview", "scroll") or
+            args[0:2] == ("yview", "moveto") or
+            args[0:2] == ("yview", "scroll")
+        ):
+            self.event_generate("<<Change>>", when="tail")
+
+        # return what the actual widget returned
+        return result  
+
 
 if __name__ == "__main__":
-    root = Tk()
+    root = tk.Tk()
     root.wm_state('normal')
-    editor = TextWindow(root)
-    editor.main()
+    text = TextWindow(root).pack(side="top", fill="both", expand=True)
+    #text.main()
     image = PhotoImage(file="viper.png")
     root.tk.call('wm', 'iconphoto', root._w, image) 
     root.mainloop()
