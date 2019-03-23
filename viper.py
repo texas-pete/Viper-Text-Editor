@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import *
-from tkinter import Tk, ttk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage
+from tkinter import Tk, ttk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage, simpledialog, Button
 import os, subprocess, json, string
 
 current_font = "arial"
@@ -59,6 +59,10 @@ class TextWindow(tk.Frame):
         edit_menu = Menu(self.menu_bar, tearoff=0)
         edit_menu.add_command(label="Undo", underline=1, command=self.undo, accelerator="Ctrl+z")
         edit_menu.add_command(label="Redo", underline=1, command=self.redo, accelerator="Ctrl+y")
+        edit_menu.add_command(label="Copy", underline=1, accelerator="Ctrl+c",
+                              command=lambda: root.focus_get().event_generate('<<Copy>>'))
+        edit_menu.add_command(label="Paste", underline=1, accelerator="Ctrl+v",
+                              command=lambda: root.focus_get().event_generate('<<Paste>>'))
         self.menu_bar.add_cascade(label="Edit", underline=0, menu=edit_menu)
 
         # Format menu
@@ -120,9 +124,18 @@ class TextWindow(tk.Frame):
         self.menu_bar.add_cascade(label="Debug", underline=1)
 
         # Go To menu
-        go_to_menu = Menu(self.menu_bar, tearoff=0)
-        go_to_menu.add_command(label="Go To", underline=1)
-        self.menu_bar.add_cascade(label="Go To", underline=1)
+        self.go_to_menu = Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="Go To", underline=0, menu=self.go_to_menu)
+        # bookmarks
+        bookmark_menu = Menu(self.go_to_menu, tearoff=0)
+        bookmark_menu.add_command(label="Toggle", underline=1, command=self.toggle_bookmark)
+        bookmark_menu.add_command(label="Clear", underline=1, command=self.clear_bookmarks)
+        bookmark_menu.add_command(label="Next", underline=1, command=self.next_bookmark)
+        bookmark_menu.add_command(label="Previous", underline=1, command=self.previous_bookmark)
+        # do we want? bookmark_menu.add_command(label="Select all", underline=1, command=self.select_all_bookmarks)
+        self.go_to_menu.add_cascade(label="Bookmarks", underline=0, menu=bookmark_menu)
+        self.go_to_menu.add_command(label="Find", underline=1, command=self.go_to_find)
+        self.go_to_menu.add_command(label="Line", underline=1, command=self.go_to_line)
 
         # Help menu
         help_menu = Menu(self.menu_bar, tearoff=0, )
@@ -132,6 +145,9 @@ class TextWindow(tk.Frame):
 
         # Display the menu
         root.config(menu=self.menu_bar)
+
+        # Set up bookmarks... not tied to path or tab so just current window/tab
+        self.bookmark_list = []
 
     def help_pop(self, event=None):
         messagebox.showinfo("Help","Hotkeys:\n\n Ctrl O: Open file \n\n Ctrl S: Save file \n\n Ctrl Y: Redo \n\n Ctrl Z: Undo ")
@@ -358,9 +374,9 @@ class TextWindow(tk.Frame):
             ('Text files', '*.txt'), ('Python files', '*.py *.pyw'), ('All files', '*.*')))  # defaultextension='.txt'
         try:
             with open(file_path, 'wb') as file:
-                text = self.text.get(1.0, "end-1c")
-                file.write(bytes(text, 'UTF-8'))
-                self.text.edit_modified(False)
+                editor_text = self.text.get(1.0, "end-1c")
+                file.write(bytes(editor_text, 'UTF-8'))
+                self.editor_text.edit_modified(False)
                 self.file_path = file_path
                 self.set_title()
                 return "saved"
@@ -392,6 +408,110 @@ class TextWindow(tk.Frame):
             self.text.edit_redo()
         except:
             print("There is nothing to redo...")
+
+    def toggle_bookmark(self, event=None):
+        try:
+            insertion_position = self.text.index("insert")
+            selected_line_column = insertion_position.split(".")
+            line_number = int(selected_line_column[0])
+            # check if exists
+            if line_number not in self.bookmark_list:
+                self.bookmark_list.append(line_number)
+                self.bookmark_list.sort(reverse=False)
+            else:
+                self.bookmark_list.remove(line_number)
+        except:
+            print("Failed to set bookmark")
+
+    def clear_bookmarks(self, event=None):
+        try:
+            self.bookmark_list = []
+        except:
+            print("Failed to clear bookmarks")
+
+    def next_bookmark(self, event=None):
+        try:
+            # take insertion position and travel down
+            insertion_position = self.text.index("insert")
+            start_line_column = insertion_position.split(".")
+            start_line = int(start_line_column[0])
+
+            first_entry_flag = True
+            for bookmarked_line in self.bookmark_list:
+                # not empty
+                if len(self.bookmark_list) > 0:
+                    # only 1 bookmark
+                    if len(self.bookmark_list) < 2:
+                        next_line = bookmarked_line
+                    # more than 1 bookmarks
+                    if bookmarked_line > start_line:
+                        if first_entry_flag:
+                            next_line = bookmarked_line
+                            first_entry_flag = False
+                    # default to first item if there are no bookmarked line #s greater than the current line
+                    else:
+                        next_line = self.bookmark_list[0]
+            message = "Next bookmarked line is " + str(next_line)
+            print(message)
+        except:
+            print("Failed to go to next bookmark")
+
+    def previous_bookmark(self, event=None):
+        try:
+            # take insertion position and travel up
+            insertion_position = self.text.index("insert")
+            start_line_column = insertion_position.split(".")
+            start_line = int(start_line_column[0])
+
+            first_entry_flag = True
+            reversed_list = self.bookmark_list
+            reversed_list.sort(reverse=True)
+            for bookmarked_line in self.bookmark_list:
+                # not empty
+                if len(self.bookmark_list) > 0:
+                    # only 1 bookmark
+                    if len(self.bookmark_list) < 2:
+                        next_line = bookmarked_line
+                    # more than 1 bookmarks
+                    if bookmarked_line < start_line:
+                        if first_entry_flag:
+                            next_line = bookmarked_line
+                            first_entry_flag = False
+                    # default to first item if there are no bookmarked line #s greater than the current line
+                    else:
+                        next_line = self.bookmark_list[0]
+            message = "Previous bookmarked line is " + str(next_line)
+            print(message)
+        except:
+            print("Failed to go to previous bookmark")
+
+    def go_to_line(self, event=None):
+        try:
+            # set insertion position to inputted line #
+            go_to_line_number = simpledialog.askinteger("Go To Line", "Line #:")
+            print("go to line #")
+            print(go_to_line_number)
+        except:
+            print("Failed to go to line #")
+
+    # input string, find in contents
+    def go_to_find(self, event=None):
+        try:
+            find_string = simpledialog.askstring("Find", "Find:")
+            editor_text = self.editor.get(1.0, "end-1c")
+            if editor_text.find(find_string) != -1:
+                insertion_position = editor_text.find(find_string)
+                # travel to line and select text
+                # insertion position can be converted to line # using split by '\n' ... column is offset
+                self.editor.tag_add("sel", "1.0", "1.3")
+                # to highlight the find... self.editor.tag_add("selected", "1.0", "1.3")
+                # to highlight the find... self.editor.tag_config("selected", background="blue", foreground="white")
+
+                print(insertion_position)
+            else:
+                print("Text was not found")
+        except:
+            print("Failed to go to find text")
 
     def close_tab(self):
         self.tabControl.destroy()
