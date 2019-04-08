@@ -3,6 +3,10 @@ from tkinter import *
 from tkinter import Tk, ttk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage, simpledialog, Button
 import os, subprocess, json, string
 from hashlib import md5
+import pyttsx3
+
+
+
 
 current_font = "arial"
 current_size = 12
@@ -25,6 +29,7 @@ class TextWindow(tk.Frame):
         #tk.Frame__init__(self, *args, *kwargs)
         self.frame = tk.Frame(self.master, *args, **kwargs)
         self.frame.pack()
+
 
         self.filetypes = (("Normal text file", "*.txt"), ("all files", "*.*"))
         self.init_dir = os.path.join(os.path.expanduser('~'), 'Desktop')
@@ -67,9 +72,9 @@ class TextWindow(tk.Frame):
 
         # Create Format Menu, with a check button for word wrap.
         format_menu = tk.Menu(menu_bar, tearoff=0)
-        #self.word_wrap = tk.BooleanVar()
-        #format_menu.add_checkbutton(label="Word Wrap", onvalue=True, offvalue=False, variable=self.word_wrap,
-        #                           command=self.wrap)
+        self.word_wrap = tk.BooleanVar()
+        format_menu.add_checkbutton(label="Word Wrap", onvalue=True, offvalue=False, variable=self.word_wrap,
+                                   command=self.wrap)
 
         # Format menu
         font_type_menu = tk.Menu(format_menu)
@@ -161,11 +166,25 @@ class TextWindow(tk.Frame):
         self.tabs[first_tab] = Document(first_tab, self.create_text_widget(first_tab))
         self.tabControl.add(first_tab, text='Untitled')
 
-        self.linenumbers = TextLineNumbers(self, width=30)
+        #self.linenumbers = TextLineNumbers(self, width=30)
         #self.linenumbers.attach(self.custom_text)
-        self.linenumbers.pack(side="left", fill="y")
+        #self.linenumbers.pack(side="left", fill="y")
 
-    def create_text_widget(self, frame):
+        self._highlight_current_line()
+        #self.tabs[self.get_tab()].text.bind('<Up>', self.get_whitespace)
+        #self.tabs[self.get_tab()].text.bind('<Down>', self.get_whitespace)
+        #self.tabs[self.get_tab()].text.bind('<Return>', self.get_whitespace)
+        self.master.bind('<Alt-w>', self.leftclick)
+        # if (#args[0] in ("insert", "replace", "delete") or
+        #         #args[0:3] == ("mark", "set", "insert") or
+        #         args[0:2] == ("yview", "moveto")
+        # ):
+        #     self.event_generate("<<CursorChange>>", when="tail")
+        #     #self.get_whitespace()
+        #
+        # self.tabs[self.get_tab()].text.bind("<<CursorChange>>", self.get_whitespace())
+
+    def create_text_widget(self, frame, *args, **kwargs):
         # Horizontal Scroll Bar
         xscrollbar = tk.Scrollbar(frame, orient='horizontal')
         xscrollbar.pack(side='bottom', fill='x')
@@ -177,6 +196,8 @@ class TextWindow(tk.Frame):
         # Create Text Editor Box
         text = tk.Text(frame, relief='sunken', borderwidth=0, wrap='none')
         text.config(xscrollcommand=xscrollbar.set, yscrollcommand=yscrollbar.set, undo=True, autoseparators=True)
+        text.tag_configure("bigfont", font=("Helvetica", "24", "bold"))
+        text.tag_configure("current_line", background="#e9e9e9")
 
         # Keyboard / Click Bindings
         text.bind('<Control-s>', self.save_file)
@@ -192,6 +213,20 @@ class TextWindow(tk.Frame):
         # Configure Scrollbars
         xscrollbar.config(command=text.xview)
         yscrollbar.config(command=text.yview)
+
+        # self.linenumbers = TextLineNumbers(self, width=30)
+        # self.linenumbers.attach(self.text)
+        # self.linenumbers.pack(side="left", fill="y")
+        #text.bind("<<CursorChange>>", self.get_whitespace())
+
+        # if (#args[0] in ("insert", "replace", "delete") or
+        #         #args[0:3] == ("mark", "set", "insert") or
+        #         args[0:2] == ("yview", "moveto")
+        # ):
+        #     self.event_generate("<<CursorChange>>", when="tail")
+        #     #self.get_whitespace()
+        #
+        # text.bind("<<CursorChange>>", self.get_whitespace())
 
         return text
 
@@ -445,8 +480,46 @@ class TextWindow(tk.Frame):
             for index in self.tabs:
                 self.tabs[index].text.config(wrap="none")
 
+    def _highlight_current_line(self, interval=100):
+        '''Updates the 'current line' highlighting every "interval" milliseconds'''
+        self.tabs[self.get_tab()].text.tag_remove("current_line", 1.0, "end")
+        self.tabs[self.get_tab()].text.tag_add("current_line", "insert linestart", "insert lineend+1c")
+        self.tabs[self.get_tab()].text.after(interval, self._highlight_current_line)
+
+    # def key_listen(self, interval=100, *args, **kwargs):
+    #     if (#args[0] in ("insert", "replace", "delete") or
+    #             #args[0:3] == ("mark", "set", "insert") or
+    #             args[2:3] == ("yview", "moveto")
+    #     ):
+    #         self.event_generate("<<CursorChange>>", when="tail")
+    #         #self.get_whitespace()
+    #
+    #     self.tabs[self.get_tab()].text.bind("<<CursorChange>>", self.get_whitespace())
+    #     self.tabs[self.get_tab()].text.after(interval, self.key_listen)
+
+    def get_whitespace(self):
+        line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
+        print(line_text)
+        count = 0
+        for i in line_text:
+            if i==" ":
+                count = count + 1
+            elif i=="\t":
+                count = count + 8
+            else:
+                break
+        print(count)
+        engine = pyttsx3.init()
+        engine.say("White space is " + str(count))
+        engine.say(line_text)
+        engine.runAndWait()
+        engine.stop()
+
+    def leftclick(self, event):
+        self.get_whitespace()
+
     def help_pop(self, event=None):
-        messagebox.showinfo("Help","Hotkeys:\n\n Ctrl O: Open file \n\n Ctrl S: Save file \n\n Ctrl Y: Redo \n\n Ctrl Z: Undo ")
+        messagebox.showinfo("Help","Hotkeys:\n\n Ctrl O: Open file \n\n Ctrl S: Save file \n\n Ctrl Y: Redo \n\n Ctrl Z: Undo \n\n Ctrl W: Say Whitespace")
 
     def about_pop(self, event=None):
         messagebox.showinfo("About us","Team name: Bits and Pieces \n\n Members: \n Daniel Merlino \n Jose Duarte \n Stephen Lederer \n Travis Pete")
@@ -547,28 +620,29 @@ class TextWindow(tk.Frame):
         self.linenumbers.redraw()
 
 
-class TextLineNumbers(tk.Canvas):
-    def __init__(self, *args, **kwargs):
-        tk.Canvas.__init__(self, *args, **kwargs)
-        self.__line_numbers = None
+# class TextLineNumbers(tk.Canvas):
+#     def __init__(self, *args, **kwargs):
+#         super(TextLineNumbers, self).tk.Canvas.__init__(self, *args, **kwargs)
+#         self.__line_numbers = None
+#
+#     def attach(self, __line_numbers):
+#         self.__line_numbers = __line_numbers
+#
+#     def redraw(self, *args):
+#         # Re-draw line numbers
+#         self.delete("all")
+#
+#         i = self.__line_numbers.index("@0,0")
+#         while True:
+#             dline = self.__line_numbers.dlineinfo(i)
+#             if dline is None: break
+#             y = dline[1]
+#             line_num = str(i).split(".")[0]
+#             self.create_text(2, y, anchor="nw", text=line_num)
+#             i = self.__line_numbers.index("%s+1line" % i)
+#
+#         self.after(30, self.redraw)
 
-    def attach(self, __line_numbers):
-        self.__line_numbers = __line_numbers
-
-    def redraw(self, *args):
-        # Re-draw line numbers
-        self.delete("all")
-
-        i = self.__line_numbers.index("@0,0")
-        while True:
-            dline = self.__line_numbers.dlineinfo(i)
-            if dline is None: break
-            y = dline[1]
-            line_num = str(i).split(".")[0]
-            self.create_text(2, y, anchor="nw", text=line_num)
-            i = self.__line_numbers.index("%s+1line" % i)
-
-        self.after(30, self.redraw)
 
 
 # class CustomText(tk.Text):
