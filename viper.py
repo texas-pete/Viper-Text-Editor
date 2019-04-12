@@ -1,73 +1,84 @@
 import tkinter as tk
 from tkinter import *
 from tkinter import Tk, ttk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage, simpledialog, Button
-import os, subprocess, json, string
+import os, subprocess, json, string, keyboard
+from hashlib import md5
+import pyttsx3
+import win32com.client as wincl
+
+
+
 
 current_font = "arial"
 current_size = 12
 
+
+class Document:
+    def __init__(self, Frame, TextWidget, FileDir=''):
+        self.file_dir = FileDir
+        self.file_name = 'Untitled' if not FileDir else os.path.basename(FileDir)
+        self.text = TextWidget
+        #self.text = CustomText(self)
+        #self.custom_text = CustomText(self.text)
+        self.status = md5(self.text.get(1.0, 'end').encode('utf-8'))
+
+
 class TextWindow(tk.Frame):
-    def __init__(self, root, *args, **kwargs):
-        self.root = root
-        self.TITLE = "Viper"
-        self.file_path = None
-        tk.Frame.__init__(self, *args, **kwargs)
-        self.set_title()
-        self.tabControl = ttk.Notebook(root)
-
-        # Frame for the Text Window
-        frame = Frame(root)
-        self.text = CustomText(self)
-        self.vsb = tk.Scrollbar(orient="vertical", command=self.text.yview)
-        self.text.configure(yscrollcommand=self.vsb.set)
-        self.text.tag_configure("bigfont", font=("Helvetica", "24", "bold"))
-        self.text.tag_configure("current_line", background="#e9e9e9")
-        self._highlight_current_line()
-        self.linenumbers = TextLineNumbers(self, width=30)
-        self.linenumbers.attach(self.text)
-        self.vsb.pack(side="right", fill="y")
-        self.linenumbers.pack(side="left", fill="y")
-        self.text.pack(side="right", fill="both", expand=True)
-        self.tabControl.pack(anchor='nw', expand=1, fill="both")
+    def __init__(self, master, *args, **kwargs):
+        self.master = master
+        self.master.title("Viper Text Editor")
+        #tk.Frame__init__(self, *args, *kwargs)
+        self.frame = tk.Frame(self.master, *args, **kwargs)
+        self.frame.pack()
 
 
+        self.filetypes = (("Normal text file", "*.txt"), ("all files", "*.*"))
+        self.init_dir = os.path.join(os.path.expanduser('~'), 'Desktop')
 
-        # Bindings and Hot Key Bindings
-        self.text.bind("<<Change>>", self._on_change)
-        self.text.bind("<Configure>", self._on_change)
+        self.tabs = {}  # { index, text widget }
 
-        # Closes the application
-        root.protocol("WM_DELETE_WINDOW", self.file_quit)
+        # Create Notebook ( for tabs ).
+        self.tabControl = ttk.Notebook(master)
+        self.tabControl.bind("<Button-2>", self.close_tab)
+        self.tabControl.bind("<B1-Motion>", self.move_tab)
+        self.tabControl.pack(expand=1, fill="both")
+        self.tabControl.enable_traversal()
+        # self.tabControl.bind('<<NotebookTabChanged>>', self.tab_change)
 
-        # Create a top level menu
-        self.menu_bar = Menu(root)
+        # Override the X button.
+        self.master.protocol('WM_DELETE_WINDOW', self.exit)
 
-        # File menu
-        file_menu = Menu(self.menu_bar, tearoff=0)
-        file_menu.add_command(label="New File", underline=1, command=self.file_new, accelerator="Ctrl+N")
-        file_menu.add_command(label="Open File", underline=1, command=self.file_open, accelerator="Ctrl+O")
-        file_menu.add_command(label="Open Project", underline=1, command=self.project_open)
-        file_menu.add_command(label="Save File", underline=1, command=self.file_save, accelerator="Ctrl+S")
-        file_menu.add_command(label="Save File As...", underline=5, command=self.file_save_as, accelerator="Ctrl+Alt+S")
-        file_menu.add_command(label="Save Project", underline=1, command=self.project_save)
+        # Create Menu Bar
+        menu_bar = tk.Menu(self.master)
+
+        # Create File Menu
+        file_menu = tk.Menu(menu_bar, tearoff=0)
+        file_menu.add_command(label="New", command=self.new_file)
+        file_menu.add_command(label="Open", command=self.open_file)
+        file_menu.add_command(label="Save", command=self.save_file)
+        file_menu.add_command(label="Save As...", command=self.save_as)
+        file_menu.add_command(label="Close", command=self.close_tab)
         file_menu.add_separator()
-        file_menu.add_command(label="Close Current Tab", underline=1, command=self.close_tab)
-        file_menu.add_command(label="Exit", underline=2, command=self.file_quit, accelerator="Alt+F4")
-        self.menu_bar.add_cascade(label="File", underline=0, menu=file_menu)
+        file_menu.add_command(label="Exit", command=self.exit)
 
-        # Edit menu
-        edit_menu = Menu(self.menu_bar, tearoff=0)
-        edit_menu.add_command(label="Undo", underline=1, command=self.undo, accelerator="Ctrl+z")
-        edit_menu.add_command(label="Redo", underline=1, command=self.redo, accelerator="Ctrl+y")
-        edit_menu.add_command(label="Copy", underline=1, accelerator="Ctrl+c",
-                              command=lambda: root.focus_get().event_generate('<<Copy>>'))
-        edit_menu.add_command(label="Paste", underline=1, accelerator="Ctrl+v",
-                              command=lambda: root.focus_get().event_generate('<<Paste>>'))
-        self.menu_bar.add_cascade(label="Edit", underline=0, menu=edit_menu)
+        # Create Edit Menu
+        edit_menu = tk.Menu(menu_bar, tearoff=0)
+        edit_menu.add_command(label="Undo", command=self.undo)
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Cut", command=self.cut)
+        edit_menu.add_command(label="Copy", command=self.copy)
+        edit_menu.add_command(label="Paste", command=self.paste)
+        edit_menu.add_command(label="Delete", command=self.delete)
+        edit_menu.add_command(label="Select All", command=self.select_all)
+
+        # Create Format Menu, with a check button for word wrap.
+        format_menu = tk.Menu(menu_bar, tearoff=0)
+        self.word_wrap = tk.BooleanVar()
+        format_menu.add_checkbutton(label="Word Wrap", onvalue=True, offvalue=False, variable=self.word_wrap,
+                                   command=self.wrap)
 
         # Format menu
-        format_menu = Menu(self.menu_bar, tearoff=0)
-        font_type_menu = Menu(format_menu)
+        font_type_menu = tk.Menu(format_menu)
         format_menu.add_cascade(label="Font Type", underline=1, menu=font_type_menu)
         font_type_menu.add_command(label="Helvetica", command=self.font_helvetica)
         font_type_menu.add_command(label="Courier New", command=self.font_courier)
@@ -81,7 +92,7 @@ class TextWindow(tk.Frame):
         font_type_menu.add_command(label="Corbel", command=self.font_corbel)
         font_type_menu.add_command(label="Georgia", command=self.font_georgia)
 
-        font_color_menu = Menu(format_menu)
+        font_color_menu = tk.Menu(format_menu)
         format_menu.add_cascade(label="Font Color", underline=1, menu=font_color_menu)
         font_color_menu.add_command(label="Black", command=self.color_black)
         font_color_menu.add_command(label="White", command=self.color_white)
@@ -92,7 +103,7 @@ class TextWindow(tk.Frame):
         font_color_menu.add_command(label="Blue", command=self.color_blue)
         font_color_menu.add_command(label="Purple", command=self.color_purple)
 
-        font_size_menu = Menu(format_menu)
+        font_size_menu = tk.Menu(format_menu)
         format_menu.add_cascade(label="Font Size", underline=1, menu=font_size_menu)
         font_size_menu.add_command(label="8", command=self.size8)
         font_size_menu.add_command(label="9", command=self.size9)
@@ -111,482 +122,616 @@ class TextWindow(tk.Frame):
         font_size_menu.add_command(label="48", command=self.size48)
         font_size_menu.add_command(label="72", command=self.size72)
 
-        theme_menu = Menu(format_menu)
+        theme_menu = tk.Menu(format_menu)
         format_menu.add_cascade(label="Themes", underline=1, menu=theme_menu)
         theme_menu.add_command(label="Day Mode", command=self.theme_day)
         theme_menu.add_command(label="Dark Mode", command=self.theme_dark)
 
-        self.menu_bar.add_cascade(label="Format", underline=1, menu=format_menu)
-
         # Debug menu
-        debug_menu = Menu(self.menu_bar, tearoff=0)
+        debug_menu = tk.Menu(menu_bar, tearoff=0)
         debug_menu.add_command(label="Debug", underline=1)
-        self.menu_bar.add_cascade(label="Debug", underline=1)
-
-        # Go To menu
-        self.go_to_menu = Menu(self.menu_bar, tearoff=0)
-        self.menu_bar.add_cascade(label="Go To", underline=0, menu=self.go_to_menu)
-        # bookmarks
-        bookmark_menu = Menu(self.go_to_menu, tearoff=0)
-        bookmark_menu.add_command(label="Toggle", underline=1, command=self.toggle_bookmark)
-        bookmark_menu.add_command(label="Clear", underline=1, command=self.clear_bookmarks)
-        bookmark_menu.add_command(label="Next", underline=1, command=self.next_bookmark)
-        bookmark_menu.add_command(label="Previous", underline=1, command=self.previous_bookmark)
-        # do we want? bookmark_menu.add_command(label="Select all", underline=1, command=self.select_all_bookmarks)
-        self.go_to_menu.add_cascade(label="Bookmarks", underline=0, menu=bookmark_menu)
-        self.go_to_menu.add_command(label="Find", underline=1, command=self.go_to_find)
-        self.go_to_menu.add_command(label="Line", underline=1, command=self.go_to_line)
 
         # Help menu
-        help_menu = Menu(self.menu_bar, tearoff=0, )
+        help_menu = Menu(menu_bar, tearoff=0, )
         help_menu.add_command(label="Help", underline=1, command=self.help_pop)
         help_menu.add_command(label="About", underline=1, command=self.about_pop)
-        self.menu_bar.add_cascade(label="Help", underline=1, menu=help_menu)
 
-        # Display the menu
-        root.config(menu=self.menu_bar)
+        # Attach to Menu Bar
+        menu_bar.add_cascade(label="File", menu=file_menu)
+        menu_bar.add_cascade(label="Edit", menu=edit_menu)
+        menu_bar.add_cascade(label="Format", underline=1, menu=format_menu)
+        menu_bar.add_cascade(label="Debug", underline=1)
+        menu_bar.add_cascade(label="Help", underline=1, menu=help_menu)
 
-        # Set up bookmarks... not tied to path or tab so just current window/tab
-        self.bookmark_list = []
 
-    def help_pop(self, event=None):
-        messagebox.showinfo("Help","Hotkeys:\n\n Ctrl O: Open file \n\n Ctrl S: Save file \n\n Ctrl Y: Redo \n\n Ctrl Z: Undo ")
+        self.master.config(menu=menu_bar)
 
-    def about_pop(self, event=None):
-        messagebox.showinfo("About us","Team name: Bits and Pieces \n\n Members: \n Daniel Merlino \n Jose Duarte \n Stephen Lederer \n Travis Pete")
+        # Create right-click menu.
+        self.right_click_menu = tk.Menu(self.master, tearoff=0)
+        self.right_click_menu.add_command(label="Undo", command=self.undo)
+        self.right_click_menu.add_separator()
+        self.right_click_menu.add_command(label="Cut", command=self.cut)
+        self.right_click_menu.add_command(label="Copy", command=self.copy)
+        self.right_click_menu.add_command(label="Paste", command=self.paste)
+        self.right_click_menu.add_command(label="Delete", command=self.delete)
+        self.right_click_menu.add_separator()
+        self.right_click_menu.add_command(label="Select All", command=self.select_all)
 
+        # Create tab right-click menu
+        self.tab_right_click_menu = tk.Menu(self.master, tearoff=0)
+        self.tab_right_click_menu.add_command(label="New Tab", command=self.new_file)
+        self.tabControl.bind('<Button-3>', self.right_click_tab)
+
+        # Create Initial Tab
+        first_tab = ttk.Frame(self.tabControl)
+        self.tabs[first_tab] = Document(first_tab, self.create_text_widget(first_tab))
+        self.tabControl.add(first_tab, text='Untitled')
+
+        #self.linenumbers = TextLineNumbers(self, width=30)
+        #self.linenumbers.attach(self.custom_text)
+        #self.linenumbers.pack(side="left", fill="y")
+
+        self._highlight_current_line()
+        #self.tabs[self.get_tab()].text.bind('<Up>', self.get_whitespace)
+        #self.tabs[self.get_tab()].text.bind('<Down>', self.get_whitespace)
+        #self.tabs[self.get_tab()].text.bind('<Return>', self.get_whitespace)
+        self.master.bind('<Alt-w>', self.leftclick)
+        self.master.bind('<Up>', self.get_whitespace2)
+        self.master.bind('<Down>', self.get_whitespace3)
+        # if (#args[0] in ("insert", "replace", "delete") or
+        #         #args[0:3] == ("mark", "set", "insert") or
+        #         args[0:2] == ("yview", "moveto")
+        # ):
+        #     self.event_generate("<<CursorChange>>", when="tail")
+        #     #self.get_whitespace()
+        #
+        # self.tabs[self.get_tab()].text.bind("<<CursorChange>>", self.get_whitespace())
+
+    def create_text_widget(self, frame, *args, **kwargs):
+        # Horizontal Scroll Bar
+        xscrollbar = tk.Scrollbar(frame, orient='horizontal')
+        xscrollbar.pack(side='bottom', fill='x')
+
+        # Vertical Scroll Bar
+        yscrollbar = tk.Scrollbar(frame)
+        yscrollbar.pack(side='right', fill='y')
+
+        # Create Text Editor Box
+        text = tk.Text(frame, relief='sunken', borderwidth=0, wrap='none')
+        text.config(xscrollcommand=xscrollbar.set, yscrollcommand=yscrollbar.set, undo=True, autoseparators=True)
+        text.tag_configure("bigfont", font=("Helvetica", "24", "bold"))
+        text.tag_configure("current_line", background="#e9e9e9")
+
+        # Keyboard / Click Bindings
+        text.bind('<Control-s>', self.save_file)
+        text.bind('<Control-o>', self.open_file)
+        text.bind('<Control-n>', self.new_file)
+        text.bind('<Control-a>', self.select_all)
+        text.bind('<Control-w>', self.close_tab)
+        text.bind('<Button-3>', self.right_click)
+
+        # Pack the text
+        text.pack(fill='both', expand=True)
+
+        # Configure Scrollbars
+        xscrollbar.config(command=text.xview)
+        yscrollbar.config(command=text.yview)
+
+        # self.linenumbers = TextLineNumbers(self, width=30)
+        # self.linenumbers.attach(self.text)
+        # self.linenumbers.pack(side="left", fill="y")
+        #text.bind("<<CursorChange>>", self.get_whitespace())
+
+        # if (#args[0] in ("insert", "replace", "delete") or
+        #         #args[0:3] == ("mark", "set", "insert") or
+        #         args[0:2] == ("yview", "moveto")
+        # ):
+        #     self.event_generate("<<CursorChange>>", when="tail")
+        #     #self.get_whitespace()
+        #
+        # text.bind("<<CursorChange>>", self.get_whitespace())
+
+
+        return text
+
+    def open_file(self, *args):
+        # Open a window to browse to the file you would like to open, returns the directory.
+        file_dir = (tk
+                    .filedialog
+                    .askopenfilename(initialdir=self.init_dir, title="Select file", filetypes=self.filetypes))
+
+        # If directory is not the empty string, try to open the file.
+        if file_dir:
+            try:
+                # Open the file.
+                file = open(file_dir)
+
+                # Create a new tab.
+                new_tab = ttk.Frame(self.tabControl)
+                self.tabs[new_tab] = Document(new_tab, self.create_text_widget(new_tab), file_dir)
+                self.tabControl.add(new_tab, text=os.path.basename(file_dir))
+                self.tabControl.select(new_tab)
+
+                # Puts the contents of the file into the text widget.
+                self.tabs[new_tab].text.insert('end', file.read())
+
+                # Update hash
+                self.tabs[new_tab].status = md5(tabs[new_tab].text.get(1.0, 'end').encode('utf-8'))
+            except:
+                return
+
+    def save_as(self, *args):
+        curr_tab = self.get_tab()
+
+        # Gets file directory and name of file to save.
+        file_dir = (tk
+                    .filedialog
+                    .asksaveasfilename(initialdir=self.init_dir, title="Select file", filetypes=self.filetypes,
+                                       defaultextension='.txt'))
+
+        # Return if directory is still empty (user closes window without specifying file name).
+        if not file_dir:
+            return
+
+        # Adds .txt suffix if not already included.
+        if file_dir[-4:] != '.txt':
+            file_dir += '.txt'
+
+        self.tabs[curr_tab].file_dir = file_dir
+        self.tabs[curr_tab].file_name = os.path.basename(file_dir)
+        self.tabControl.tab(curr_tab, text=self.tabs[curr_tab].file_name)
+
+        # Writes text widget's contents to file.
+        file = open(file_dir, 'w')
+        file.write(self.tabs[curr_tab].text.get(1.0, 'end'))
+        file.close()
+
+        # Update hash
+        self.tabs[curr_tab].status = md5(self.tabs[curr_tab].text.get(1.0, 'end').encode('utf-8'))
+
+    def save_file(self, *args):
+        curr_tab = self.get_tab()
+
+        # If file directory is empty or Untitled, use save_as to get save information from user.
+        if not self.tabs[curr_tab].file_dir:
+            self.save_as()
+
+        # Otherwise save file to directory, overwriting existing file or creating a new one.
+        else:
+            with open(self.tabs[curr_tab].file_dir, 'w') as file:
+                file.write(self.tabs[curr_tab].text.get(1.0, 'end'))
+
+            # Update hash
+            self.tabs[curr_tab].status = md5(self.tabs[curr_tab].text.get(1.0, 'end').encode('utf-8'))
+
+    def new_file(self, *args):
+        # Create new tab
+        new_tab = ttk.Frame(self.tabControl)
+        self.tabs[new_tab] = Document(new_tab, self.create_text_widget(new_tab))
+        self.tabs[new_tab].text.config(wrap='word' if self.word_wrap.get() else 'none')
+        self.tabControl.add(new_tab, text='Untitled')
+        self.tabControl.select(new_tab)
+
+    def copy(self):
+        # Clears the clipboard, copies selected contents.
+        try:
+            sel = self.tabs[self.get_tab()].text.get(tk.SEL_FIRST, tk.SEL_LAST)
+            self.master.clipboard_clear()
+            self.master.clipboard_append(sel)
+        # If no text is selected.
+        except tk.TclError:
+            pass
+
+    def delete(self):
+        # Delete the selected text.
+        try:
+            self.tabs[self.get_tab()].text.delete(tk.SEL_FIRST, tk.SEL_LAST)
+        # If no text is selected.
+        except tk.TclError:
+            pass
+
+    def cut(self):
+        # Copies selection to the clipboard, then deletes selection.
+        try:
+            sel = self.tabs[self.get_tab()].text.get(tk.SEL_FIRST, tk.SEL_LAST)
+            self.master.clipboard_clear()
+            self.master.clipboard_append(sel)
+            self.tabs[self.get_tab()].text.delete(tk.SEL_FIRST, tk.SEL_LAST)
+        # If no text is selected.
+        except tk.TclError:
+            pass
+
+    ##########################################################
+    #FORMAT MENU FUNCTIONS
     def font_helvetica(self, event=None):
-        self.text.config(font=("Helvetica", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Helvetica", current_size))
         global current_font
         current_font = "Helvetica"
     def font_courier(self, event=None):
-        self.text.config(font=("Courier", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Courier", current_size))
         global current_font
         current_font = "Courier"
     def font_times(self, event=None):
-        self.text.config(font=("Times", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Times", current_size))
         global current_font
         current_font = "Times"
     def font_cambria(self, event=None):
-        self.text.config(font=("Cambria", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Cambria", current_size))
         global current_font
         current_font = "Cambria"
     def font_calibri(self, event=None):
-        self.text.config(font=("Calibri", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Calibri", current_size))
         global current_font
         current_font = "Calibri"
     def font_verdana(self, event=None):
-        self.text.config(font=("Verdana", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Verdana", current_size))
         global current_font
         current_font = "Verdana"
     def font_papyrus(self, event=None):
-        self.text.config(font=("Papyrus", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Papyrus", current_size))
         global current_font
         current_font = "Papyrus"
     def font_gothic(self, event=None):
-        self.text.config(font=("Gothic", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Gothic", current_size))
         global current_font
         current_font = "Gothic"
     def font_rockwell(self, event=None):
-        self.text.config(font=("Rockwell", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Rockwell", current_size))
         global current_font
         current_font = "Rockwell"
     def font_corbel(self, event=None):
-        self.text.config(font=("Corbel", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Corbel", current_size))
         global current_font
         current_font = "Corbel"
     def font_georgia(self, event=None):
-        self.text.config(font=("Georgia", current_size))
+        self.tabs[self.get_tab()].text.config(font=("Georgia", current_size))
         global current_font
         current_font = "Georgia"
 
     def color_black(self, event=None):
-        self.text.config(fg="black")
+        self.tabs[self.get_tab()].text.config(fg="black")
     def color_white(self, event=None):
-        self.text.config(fg="white")
+        self.tabs[self.get_tab()].text.config(fg="white")
     def color_red(self, event=None):
-        self.text.config(fg="red")
+        self.tabs[self.get_tab()].text.config(fg="red")
     def color_orange(self, event=None):
-        self.text.config(fg="orange")
+        self.tabs[self.get_tab()].text.config(fg="orange")
     def color_yellow(self, event=None):
-        self.text.config(fg="yellow")
+        self.tabs[self.get_tab()].text.config(fg="yellow")
     def color_green(self, event=None):
-        self.text.config(fg="green")
+        self.tabs[self.get_tab()].text.config(fg="green")
     def color_blue(self, event=None):
-        self.text.config(fg="blue")
+        self.tabs[self.get_tab()].text.config(fg="blue")
     def color_purple(self, event=None):
-        self.text.config(fg="purple")
+        self.tabs[self.get_tab()].text.config(fg="purple")
 
     def size8(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 8))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 8))
         current_size = 8
     def size9(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 9))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 9))
         current_size = 9
     def size10(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 10))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 10))
         current_size = 10
     def size11(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 11))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 11))
         current_size = 11
     def size12(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 12))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 12))
         current_size = 12
     def size14(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 14))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 14))
         current_size = 14
     def size16(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 16))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 16))
         current_size = 16
     def size18(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 18))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 18))
         current_size = 18
     def size20(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 20))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 20))
         current_size = 20
     def size22(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 22))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 22))
         current_size = 22
     def size24(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 24))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 24))
         current_size = 24
     def size26(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 26))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 26))
         current_size = 26
     def size28(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 28))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 28))
         current_size = 28
     def size36(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 36))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 36))
         current_size = 36
     def size48(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 48))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 48))
         current_size = 48
     def size72(self, event=None):
         global current_font, current_size
-        self.text.config(font=(current_font, 72))
+        self.tabs[self.get_tab()].text.config(font=(current_font, 72))
         current_size = 72
 
     def theme_day(self, event=None):
-        self.text.config(background="White")
+        self.tabs[self.get_tab()].text.config(background="White")
     def theme_dark(self, event=None):
-        self.text.config(background="Black")
+        self.tabs[self.get_tab()].text.config(background="Black")
+    ##########################################################
+
+    def wrap(self):
+        if self.word_wrap.get() == True:
+            for index in self.tabs:
+                self.tabs[index].text.config(wrap="word")
+        else:
+            for index in self.tabs:
+                self.tabs[index].text.config(wrap="none")
 
     def _highlight_current_line(self, interval=100):
         '''Updates the 'current line' highlighting every "interval" milliseconds'''
-        self.text.tag_remove("current_line", 1.0, "end")
-        self.text.tag_add("current_line", "insert linestart", "insert lineend+1c")
-        self.root.after(interval, self._highlight_current_line)
+        self.tabs[self.get_tab()].text.tag_remove("current_line", 1.0, "end")
+        self.tabs[self.get_tab()].text.tag_add("current_line", "insert linestart", "insert lineend+1c")
+        self.tabs[self.get_tab()].text.after(interval, self._highlight_current_line)
 
-    def save_if_modified(self, event=None):
-        if self.text.edit_modified():
-            response = messagebox.askyesnocancel("Save?",
-                                                 "This document has been modified. Do you want to save changes?")
-            if response:  # yes/save
-                result = self.file_save()
-                if result == "saved":
-                    return True
-                # Save cancelled
-                else:
-                    return None
+    # def key_listen(self, interval=100, *args, **kwargs):
+    #     if (#args[0] in ("insert", "replace", "delete") or
+    #             #args[0:3] == ("mark", "set", "insert") or
+    #             args[2:3] == ("yview", "moveto")
+    #     ):
+    #         self.event_generate("<<CursorChange>>", when="tail")
+    #         #self.get_whitespace()
+    #
+    #     self.tabs[self.get_tab()].text.bind("<<CursorChange>>", self.get_whitespace())
+    #     self.tabs[self.get_tab()].text.after(interval, self.key_listen)
+
+    def get_whitespace(self):
+        line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
+        print(line_text)
+        count = 0
+        for i in line_text:
+            if i==" ":
+                count = count + 1
+            elif i=="\t":
+                count = count + 8
             else:
-                return response
-                # Not modified
-        else:
-            return True
+                break
+        print(count)
+        engine = pyttsx3.init()
+        engine.say("White space is " + str(count))
+        engine.say(line_text)
+        engine.runAndWait()
+        engine.stop()
 
-    def file_new(self, event=None):
-        result = self.save_if_modified()
-        # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
-        if result != None:
-            self.text.delete(1.0, "end")
-            self.text.edit_modified(False)
-            self.text.edit_reset()
-            self.file_path = None
-            self.set_title()
-            tab1 = ttk.Frame(self.tabControl)  # Create a tab
-            self.tabControl.add(tab1, text='New Tab')  # Add the tab
-            return tab1
-
-
-    def file_open(self, event=None, file_path=None):
-        result = self.save_if_modified()
-        # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
-        if result != None:
-            if file_path == None:
-                file_path = filedialog.askopenfilename()
-            if file_path != None and file_path != '':
-                with open(file_path, encoding="utf-8") as file:
-                    fileContents = file.read()
-                # Set current text to file contents
-                self.text.delete(1.0, "end")
-                self.text.insert(1.0, fileContents)
-                self.text.edit_modified(False)
-                self.file_path = file_path
-
-    def project_open(self, event=None, file_path=None):
-        result = self.save_if_modified()
-        # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
-        if result != None:
-            if file_path == None:
-                file_path = filedialog.askopenfilename()
-            if file_path != None and file_path != '':
-                with open(file_path, encoding="utf-8") as file:
-                    fileContents = file.read()
-                # Set current text to file contents
-                self.text.delete(1.0, "end")
-                self.text.insert(1.0, fileContents)
-                self.text.edit_modified(False)
-                self.file_path = file_path
-
-    def file_save(self, event=None):
-        if self.file_path == None:
-            result = self.file_save_as()
-        else:
-            result = self.file_save_as(file_path=self.file_path)
-        return result
-
-    def project_save(self, event=None):
-        if self.file_path == None:
-            result = self.file_save_as()
-        else:
-            result = self.file_save_as(file_path=self.file_path)
-        return result
-
-    def file_save_as(self, event=None, file_path=None):
-        if file_path == None:
-            file_path = filedialog.asksaveasfilename(filetypes=(
-            ('Text files', '*.txt'), ('Python files', '*.py *.pyw'), ('All files', '*.*')))  # defaultextension='.txt'
-        try:
-            with open(file_path, 'wb') as file:
-                editor_text = self.text.get(1.0, "end-1c")
-                file.write(bytes(editor_text, 'UTF-8'))
-                self.editor_text.edit_modified(False)
-                self.file_path = file_path
-                self.set_title()
-                return "saved"
-        except FileNotFoundError:
-            print('FileNotFoundError')
-            return "cancelled"
-
-    def file_quit(self, event=None):
-        result = self.save_if_modified()
-        # None => Aborted or Save cancelled, False => Discarded, True = Saved or Not modified
-        if result != None:
-            self.root.destroy()
-
-    def set_title(self, event=None):
-        if self.file_path != None:
-            title = os.path.basename(self.file_path)
-        else:
-            title = "Untitled"
-        self.root.title(title + " - " + self.TITLE)
-
-    def undo(self, event=None):
-        try:
-            self.text.edit_undo()
-        except:
-            print("There is nothing to undo...")
-
-    def redo(self, event=None):
-        try:
-            self.text.edit_redo()
-        except:
-            print("There is nothing to redo...")
-
-    def toggle_bookmark(self, event=None):
-        try:
-            insertion_position = self.text.index("insert")
-            selected_line_column = insertion_position.split(".")
-            line_number = int(selected_line_column[0])
-            # check if exists
-            if line_number not in self.bookmark_list:
-                self.bookmark_list.append(line_number)
-                self.bookmark_list.sort(reverse=False)
+    def get_whitespace2(self, event):
+        line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
+        print(line_text)
+        count = 0
+        for i in line_text:
+            if i==" ":
+                count = count + 1
+            elif i=="\t":
+                count = count + 8
             else:
-                self.bookmark_list.remove(line_number)
-        except:
-            print("Failed to set bookmark")
+                break
+        def onStart():
+            print("starting")
 
-    def clear_bookmarks(self, event=None):
-        try:
-            self.bookmark_list = []
-        except:
-            print("Failed to clear bookmarks")
+        engine = pyttsx3.init()
+        print(count)
+        engine.connect('started-uttrance', onStart)
+        engine.say("White space is " + str(count))
+        engine.say(line_text)
+        engine.runAndWait()
 
-    def next_bookmark(self, event=None):
-        try:
-            # take insertion position and travel down
-            insertion_position = self.text.index("insert")
-            start_line_column = insertion_position.split(".")
-            start_line = int(start_line_column[0])
-
-            first_entry_flag = True
-            for bookmarked_line in self.bookmark_list:
-                # not empty
-                if len(self.bookmark_list) > 0:
-                    # only 1 bookmark
-                    if len(self.bookmark_list) < 2:
-                        next_line = bookmarked_line
-                    # more than 1 bookmarks
-                    if bookmarked_line > start_line:
-                        if first_entry_flag:
-                            next_line = bookmarked_line
-                            first_entry_flag = False
-                    # default to first item if there are no bookmarked line #s greater than the current line
-                    else:
-                        next_line = self.bookmark_list[0]
-            message = "Next bookmarked line is " + str(next_line)
-            print(message)
-        except:
-            print("Failed to go to next bookmark")
-
-    def previous_bookmark(self, event=None):
-        try:
-            # take insertion position and travel up
-            insertion_position = self.text.index("insert")
-            start_line_column = insertion_position.split(".")
-            start_line = int(start_line_column[0])
-
-            first_entry_flag = True
-            reversed_list = self.bookmark_list
-            reversed_list.sort(reverse=True)
-            for bookmarked_line in self.bookmark_list:
-                # not empty
-                if len(self.bookmark_list) > 0:
-                    # only 1 bookmark
-                    if len(self.bookmark_list) < 2:
-                        next_line = bookmarked_line
-                    # more than 1 bookmarks
-                    if bookmarked_line < start_line:
-                        if first_entry_flag:
-                            next_line = bookmarked_line
-                            first_entry_flag = False
-                    # default to first item if there are no bookmarked line #s greater than the current line
-                    else:
-                        next_line = self.bookmark_list[0]
-            message = "Previous bookmarked line is " + str(next_line)
-            print(message)
-        except:
-            print("Failed to go to previous bookmark")
-
-    def go_to_line(self, event=None):
-        try:
-            # set insertion position to inputted line #
-            go_to_line_number = simpledialog.askinteger("Go To Line", "Line #:")
-            print("go to line #")
-            print(go_to_line_number)
-        except:
-            print("Failed to go to line #")
-
-    # input string, find in contents
-    def go_to_find(self, event=None):
-        try:
-            find_string = simpledialog.askstring("Find", "Find:")
-            editor_text = self.editor.get(1.0, "end-1c")
-            if editor_text.find(find_string) != -1:
-                insertion_position = editor_text.find(find_string)
-                # travel to line and select text
-                # insertion position can be converted to line # using split by '\n' ... column is offset
-                self.editor.tag_add("sel", "1.0", "1.3")
-                # to highlight the find... self.editor.tag_add("selected", "1.0", "1.3")
-                # to highlight the find... self.editor.tag_config("selected", background="blue", foreground="white")
-
-                print(insertion_position)
+    def get_whitespace3(self, event):
+        line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
+        print(line_text)
+        count = 0
+        for i in line_text:
+            if i==" ":
+                count = count + 1
+            elif i=="\t":
+                count = count + 8
             else:
-                print("Text was not found")
-        except:
-            print("Failed to go to find text")
+                break
+        def onStart():
+            print("starting")
 
-    def close_tab(self):
-        self.tabControl.destroy()
+        engine = pyttsx3.init()
+        print(count)
+        engine.connect('started-uttrance', onStart)
+        engine.say("White space is " + str(count))
+        engine.say(line_text)
+        engine.runAndWait()
 
-            # def main(self, event=None):
-        # self.text.bind("<Control-o>", self.file_open)
-        # self.text.bind("<Control-O>", self.file_open)
-        # self.text.bind("<Control-S>", self.file_save)
-        # self.text.bind("<Control-s>", self.file_save)
-        # self.text.bind("<Control-y>", self.redo)
-        # self.text.bind("<Control-Y>", self.redo)
-        # self.text.bind("<Control-Z>", self.undo)
-        # self.text.bind("<Control-z>", self.undo)
+
+
+    def leftclick(self, event):
+        self.get_whitespace()
+
+    def help_pop(self, event=None):
+        messagebox.showinfo("Help","Hotkeys:\n\n Ctrl O: Open file \n\n Ctrl S: Save file \n\n Ctrl Y: Redo \n\n Ctrl Z: Undo \n\n Alt W: Say Whitespace")
+
+    def about_pop(self, event=None):
+        messagebox.showinfo("About us","Team name: Bits and Pieces \n\n Members: \n Daniel Merlino \n Jose Duarte \n Stephen Lederer \n Travis Pete")
+
+
+    def paste(self):
+        try:
+            self.tabs[self.get_tab()].text.insert(tk.INSERT, self.master.clipboard_get())
+        except tk.TclError:
+            pass
+
+    def select_all(self, *args):
+        curr_tab = self.get_tab()
+
+        # Selects / highlights all the text.
+        self.tabs[curr_tab].text.tag_add(tk.SEL, "1.0", tk.END)
+
+        # Set mark position to the end and scroll to the end of selection.
+        self.tabs[curr_tab].text.mark_set(tk.INSERT, tk.END)
+        self.tabs[curr_tab].text.see(tk.INSERT)
+
+    def undo(self):
+        self.tabs[self.get_tab()].text.edit_undo()
+
+    def right_click(self, event):
+        self.right_click_menu.post(event.x_root, event.y_root)
+
+    def right_click_tab(self, event):
+        self.tab_right_click_menu.post(event.x_root, event.y_root)
+
+    def close_tab(self, event=None):
+        # Make sure there is at least one tab still open.
+        if self.tabControl.index("end") > 1:
+            # Close the current tab if close is selected from file menu, or keyboard shortcut.
+            if event is None or event.type == str(2):
+                selected_tab = self.get_tab()
+            # Otherwise close the tab based on coordinates of center-click.
+            else:
+                try:
+                    index = event.widget.index('@%d,%d' % (event.x, event.y))
+                    selected_tab = self.tabControl._nametowidget(self.tabControl.tabs()[index])
+                except tk.TclError:
+                    return
+
+            self.tabControl.forget(selected_tab)
+            self.tabs.pop(selected_tab)
+
+    def exit(self):
+        # Check if any changes have been made.
+        if self.save_changes():
+            self.master.destroy()
+        else:
+            return
+
+    def save_changes(self):
+        curr_tab = self.get_tab()
+        file_dir = self.tabs[curr_tab].file_dir
+
+        # Check if any changes have been made, returns False if user chooses to cancel rather than select to save or not.
+        if md5(self.tabs[curr_tab].text.get(1.0, 'end').encode('utf-8')).digest() != self.tabs[
+            curr_tab].status.digest():
+            # If changes were made since last save, ask if user wants to save.
+            m = messagebox.askyesnocancel('Editor', 'Do you want to save changes to ' + (
+                'Untitled' if not file_dir else file_dir) + '?')
+
+            # If None, cancel.
+            if m is None:
+                return False
+            # else if True, save.
+            elif m is True:
+                self.save_file()
+            # else don't save.
+            else:
+                pass
+
+        return True
+
+    # Get the object of the current tab.
+    def get_tab(self):
+        return self.tabControl._nametowidget(self.tabControl.select())
+
+    def move_tab(self, event):
+        '''
+        Check if there is more than one tab.
+
+        Use the y-coordinate of the current tab so that if the user moves the mouse up / down
+        out of the range of the tabs, the left / right movement still moves the tab.
+        '''
+        if self.tabControl.index("end") > 1:
+            y = self.get_tab().winfo_y() - 5
+
+            try:
+                self.tabControl.insert(event.widget.index('@%d,%d' % (event.x, y)), self.tabControl.select())
+            except tk.TclError:
+                return
 
     def _on_change(self, event):
         self.linenumbers.redraw()
 
 
-class TextLineNumbers(tk.Canvas):
-    def __init__(self, *args, **kwargs):
-        tk.Canvas.__init__(self, *args, **kwargs)
-        self.__line_numbers = None
-
-    def attach(self, __line_numbers):
-        self.__line_numbers = __line_numbers
-
-    def redraw(self, *args):
-        # Re-draw line numbers
-        self.delete("all")
-
-        i = self.__line_numbers.index("@0,0")
-        while True:
-            dline = self.__line_numbers.dlineinfo(i)
-            if dline is None: break
-            y = dline[1]
-            line_num = str(i).split(".")[0]
-            self.create_text(2, y, anchor="nw", text=line_num)
-            i = self.__line_numbers.index("%s+1line" % i)
-
-
-class CustomText(tk.Text):
-    def __init__(self, *args, **kwargs):
-        tk.Text.__init__(self, *args, **kwargs)
-
-        # create a proxy for the underlying widget
-        self._orig = self._w + "_orig"
-        self.tk.call("rename", self._w, self._orig)
-        self.tk.createcommand(self._w, self._proxy)
-
-    def _proxy(self, *args):
-        # let the actual widget perform the requested action
-        cmd = (self._orig,) + args
-        result = self.tk.call(cmd)
-
-        # generate an event if something was added or deleted,
-        # or the cursor position changed
-        if (args[0] in ("insert", "replace", "delete") or
-                args[0:3] == ("mark", "set", "insert") or
-                args[0:2] == ("xview", "moveto") or
-                args[0:2] == ("xview", "scroll") or
-                args[0:2] == ("yview", "moveto") or
-                args[0:2] == ("yview", "scroll")
-        ):
-            self.event_generate("<<Change>>", when="tail")
-
-        # return what the actual widget returned
-        return result
+# class TextLineNumbers(tk.Canvas):
+#     def __init__(self, *args, **kwargs):
+#         super(TextLineNumbers, self).tk.Canvas.__init__(self, *args, **kwargs)
+#         self.__line_numbers = None
+#
+#     def attach(self, __line_numbers):
+#         self.__line_numbers = __line_numbers
+#
+#     def redraw(self, *args):
+#         # Re-draw line numbers
+#         self.delete("all")
+#
+#         i = self.__line_numbers.index("@0,0")
+#         while True:
+#             dline = self.__line_numbers.dlineinfo(i)
+#             if dline is None: break
+#             y = dline[1]
+#             line_num = str(i).split(".")[0]
+#             self.create_text(2, y, anchor="nw", text=line_num)
+#             i = self.__line_numbers.index("%s+1line" % i)
+#
+#         self.after(30, self.redraw)
 
 
-if __name__ == "__main__":
+
+# class CustomText(tk.Text):
+#     def __init__(self, *args, **kwargs):
+#         tk.Text.__init__(self, *args, **kwargs)
+#
+#         #create a proxy for the underlying widget
+#         self._orig = self._w + "_orig"
+#         self.tk.call("rename", self._w, self._orig)
+#         self.tk.createcommand(self._w, self._proxy)
+#
+#         def _proxy(self, *args):
+#             # let the actual widget perform the requested action
+#             cmd = (self._orig,) + args
+#             result = self.tk.call(cmd)
+#
+#             # generate an event if something was added or deleted,
+#             # or the cursor position changed
+#             if (args[0] in ("insert", "replace", "delete") or
+#                     args[0:3] == ("mark", "set", "insert") or
+#                     args[0:2] == ("xview", "moveto") or
+#                     args[0:2] == ("xview", "scroll") or
+#                     args[0:2] == ("yview", "moveto") or
+#                     args[0:2] == ("yview", "scroll")
+#             ):
+#                 self.event_generate("<<Change>>", when="tail")
+#
+#             # return what the actual widget returned
+#             return result
+
+#def main():
+#    root = tk.Tk()
+#    app = TextWindow(root)
+#    root.mainloop()
+
+
+if __name__ == '__main__':
     root = tk.Tk()
+    app = TextWindow(root)
     root.wm_state('normal')
-    text = TextWindow(root).pack(side="top", fill="both", expand=True)
-    # text.main()
+    #text = TextWindow(root).pack(side="top", fill="both", expand=True)
     image = PhotoImage(file="viper.png")
     root.tk.call('wm', 'iconphoto', root._w, image)
-    #text = Text(root)
     root.mainloop()
