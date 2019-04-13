@@ -53,23 +53,24 @@ class TextWindow(tk.Frame):
 
         # Create File Menu
         file_menu = tk.Menu(menu_bar, tearoff=0)
-        file_menu.add_command(label="New", command=self.new_file)
-        file_menu.add_command(label="Open", command=self.open_file)
-        file_menu.add_command(label="Save", command=self.save_file)
-        file_menu.add_command(label="Save As...", command=self.save_as)
-        file_menu.add_command(label="Close", command=self.close_tab)
+        file_menu.add_command(label="New", underline=1, command=self.new_file, accelerator="Ctrl+N")
+        file_menu.add_command(label="Open", underline=1, command=self.open_file, accelerator="Ctrl+O")
+        file_menu.add_command(label="Save", underline=1, command=self.save_file, accelerator="Ctrl+S")
+        file_menu.add_command(label="Save As...", underline=1, command=self.save_as, accelerator="Ctrl+Alt+S")
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.exit)
+        file_menu.add_command(label="Close Tab", underline=1, command=self.close_tab, accelerator="Ctrl+W")
+        file_menu.add_command(label="Exit", underline=1, command=self.exit, accelerator="Alt+F4")
 
         # Create Edit Menu
         edit_menu = tk.Menu(menu_bar, tearoff=0)
-        edit_menu.add_command(label="Undo", command=self.undo)
+        edit_menu.add_command(label="Undo", underline=1, command=self.undo, accelerator="Ctrl+Z")
+        edit_menu.add_command(label="Redo", underline=1, command=self.redo, accelerator="Ctrl+Y")
         edit_menu.add_separator()
-        edit_menu.add_command(label="Cut", command=self.cut)
-        edit_menu.add_command(label="Copy", command=self.copy)
-        edit_menu.add_command(label="Paste", command=self.paste)
+        edit_menu.add_command(label="Cut", underline=1, command=self.cut, accelerator="Ctrl+X")
+        edit_menu.add_command(label="Copy", underline=1, command=self.copy, accelerator="Ctrl+C")
+        edit_menu.add_command(label="Paste", command=self.paste, accelerator="Ctrl+V")
         edit_menu.add_command(label="Delete", command=self.delete)
-        edit_menu.add_command(label="Select All", command=self.select_all)
+        edit_menu.add_command(label="Select All", command=self.select_all, accelerator="Ctrl+A")
 
         # Create Format Menu, with a check button for word wrap.
         format_menu = tk.Menu(menu_bar, tearoff=0)
@@ -133,15 +134,15 @@ class TextWindow(tk.Frame):
 
         # Help menu
         help_menu = Menu(menu_bar, tearoff=0, )
-        help_menu.add_command(label="Help", underline=1, command=self.help_pop)
-        help_menu.add_command(label="About", underline=1, command=self.about_pop)
+        help_menu.add_command(label="Help", underline=1, command=self.help_pop, accelerator="F11")
+        help_menu.add_command(label="About", underline=1, command=self.about_pop, accelerator="F12")
 
         # Attach to Menu Bar
         menu_bar.add_cascade(label="File", menu=file_menu)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
         menu_bar.add_cascade(label="Format", underline=1, menu=format_menu)
         menu_bar.add_cascade(label="Debug", underline=1)
-        menu_bar.add_cascade(label="Help", underline=1, menu=help_menu)
+        menu_bar.add_cascade(label="Help", underline=1, menu=help_menu, )
 
 
         self.master.config(menu=menu_bar)
@@ -209,6 +210,8 @@ class TextWindow(tk.Frame):
         text.bind('<Control-a>', self.select_all)
         text.bind('<Control-w>', self.close_tab)
         text.bind('<Button-3>', self.right_click)
+        text.bind('<F11>', self.about_pop)
+        text.bind('<F12>', self.help_pop)
 
         # Pack the text
         text.pack(fill='both', expand=True)
@@ -591,6 +594,9 @@ class TextWindow(tk.Frame):
 
     def undo(self):
         self.tabs[self.get_tab()].text.edit_undo()
+
+    def redo(self):
+        self.tabs[self.get_tab()].text.edit_redo()
 
     def right_click(self, event):
         self.right_click_menu.post(event.x_root, event.y_root)
