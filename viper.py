@@ -6,7 +6,6 @@ from hashlib import md5
 import pyttsx3
 import win32com.client as wincl
 
-
 current_font = "arial"
 current_size = 12
 
@@ -17,8 +16,8 @@ class Document:
         self.file_name = 'Untitled' if not FileDir else os.path.basename(FileDir)
         self.text = TextWidget
         self.bookmark_list = []
-        #self.text = CustomText(self)
-        #self.custom_text = CustomText(self.text)
+        # self.text = CustomText(self)
+        # self.custom_text = CustomText(self.text)
         self.status = md5(self.text.get(1.0, 'end').encode('utf-8'))
 
     def get_bookmarks(self):
@@ -30,16 +29,16 @@ class Document:
     def remove_bookmark(self, index):
         self.bookmark_list.remove(index)
 
+
 class TextWindow(tk.Frame):
     def __init__(self, master, *args, **kwargs):
         self.master = master
         self.master.title("Viper Text Editor")
-        #tk.Frame__init__(self, *args, *kwargs)
+        # tk.Frame__init__(self, *args, *kwargs)
         self.frame = tk.Frame(self.master, *args, **kwargs)
         self.frame.pack()
 
-
-        self.filetypes = (("Normal text file", "*.txt"), ("all files", "*.*"))
+        self.filetypes = (("Python File", "*.py"), ("Text File", "*.txt"), ("all files", "*.*"))
         self.init_dir = os.path.join(os.path.expanduser('~'), 'Desktop')
 
         self.tabs = {}  # { index, text widget }
@@ -83,7 +82,7 @@ class TextWindow(tk.Frame):
         format_menu = tk.Menu(menu_bar, tearoff=0)
         self.word_wrap = tk.BooleanVar()
         format_menu.add_checkbutton(label="Word Wrap", onvalue=True, offvalue=False, variable=self.word_wrap,
-                                   command=self.wrap)
+                                    command=self.wrap)
 
         # Go To menu
 
@@ -163,7 +162,6 @@ class TextWindow(tk.Frame):
         menu_bar.add_cascade(label="Debug", underline=1)
         menu_bar.add_cascade(label="Help", underline=1, menu=help_menu, )
 
-
         self.master.config(menu=menu_bar)
 
         # Create right-click menu.
@@ -187,14 +185,14 @@ class TextWindow(tk.Frame):
         self.tabs[first_tab] = Document(first_tab, self.create_text_widget(first_tab))
         self.tabControl.add(first_tab, text='Untitled')
 
-        #self.linenumbers = TextLineNumbers(self, width=30)
-        #self.linenumbers.attach(self.custom_text)
-        #self.linenumbers.pack(side="left", fill="y")
+        # self.linenumbers = TextLineNumbers(self, width=30)
+        # self.linenumbers.attach(self.custom_text)
+        # self.linenumbers.pack(side="left", fill="y")
 
         self._highlight_current_line()
-        #self.tabs[self.get_tab()].text.bind('<Up>', self.get_whitespace)
-        #self.tabs[self.get_tab()].text.bind('<Down>', self.get_whitespace)
-        #self.tabs[self.get_tab()].text.bind('<Return>', self.get_whitespace)
+        # self.tabs[self.get_tab()].text.bind('<Up>', self.get_whitespace)
+        # self.tabs[self.get_tab()].text.bind('<Down>', self.get_whitespace)
+        # self.tabs[self.get_tab()].text.bind('<Return>', self.get_whitespace)
         self.master.bind('<Alt-w>', self.leftclick)
         self.master.bind('<Up>', self.get_whitespace2)
         self.master.bind('<Down>', self.get_whitespace3)
@@ -242,7 +240,7 @@ class TextWindow(tk.Frame):
         # self.linenumbers = TextLineNumbers(self, width=30)
         # self.linenumbers.attach(self.text)
         # self.linenumbers.pack(side="left", fill="y")
-        #text.bind("<<CursorChange>>", self.get_whitespace())
+        # text.bind("<<CursorChange>>", self.get_whitespace())
 
         # if (#args[0] in ("insert", "replace", "delete") or
         #         #args[0:3] == ("mark", "set", "insert") or
@@ -252,7 +250,6 @@ class TextWindow(tk.Frame):
         #     #self.get_whitespace()
         #
         # text.bind("<<CursorChange>>", self.get_whitespace())
-
 
         return text
 
@@ -296,8 +293,8 @@ class TextWindow(tk.Frame):
             return
 
         # Adds .txt suffix if not already included.
-        if file_dir[-4:] != '.txt':
-            file_dir += '.txt'
+        #if file_dir[-4:] != '.py':
+        #    file_dir += '.py'
 
         self.tabs[curr_tab].file_dir = file_dir
         self.tabs[curr_tab].file_name = os.path.basename(file_dir)
@@ -364,47 +361,57 @@ class TextWindow(tk.Frame):
             pass
 
     ##########################################################
-    #FORMAT MENU FUNCTIONS
+    # FORMAT MENU FUNCTIONS
     def font_helvetica(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Helvetica", current_size))
         global current_font
         current_font = "Helvetica"
+
     def font_courier(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Courier", current_size))
         global current_font
         current_font = "Courier"
+
     def font_times(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Times", current_size))
         global current_font
         current_font = "Times"
+
     def font_cambria(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Cambria", current_size))
         global current_font
         current_font = "Cambria"
+
     def font_calibri(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Calibri", current_size))
         global current_font
         current_font = "Calibri"
+
     def font_verdana(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Verdana", current_size))
         global current_font
         current_font = "Verdana"
+
     def font_papyrus(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Papyrus", current_size))
         global current_font
         current_font = "Papyrus"
+
     def font_gothic(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Gothic", current_size))
         global current_font
         current_font = "Gothic"
+
     def font_rockwell(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Rockwell", current_size))
         global current_font
         current_font = "Rockwell"
+
     def font_corbel(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Corbel", current_size))
         global current_font
         current_font = "Corbel"
+
     def font_georgia(self, event=None):
         self.tabs[self.get_tab()].text.config(font=("Georgia", current_size))
         global current_font
@@ -412,18 +419,25 @@ class TextWindow(tk.Frame):
 
     def color_black(self, event=None):
         self.tabs[self.get_tab()].text.config(fg="black")
+
     def color_white(self, event=None):
         self.tabs[self.get_tab()].text.config(fg="white")
+
     def color_red(self, event=None):
         self.tabs[self.get_tab()].text.config(fg="red")
+
     def color_orange(self, event=None):
         self.tabs[self.get_tab()].text.config(fg="orange")
+
     def color_yellow(self, event=None):
         self.tabs[self.get_tab()].text.config(fg="yellow")
+
     def color_green(self, event=None):
         self.tabs[self.get_tab()].text.config(fg="green")
+
     def color_blue(self, event=None):
         self.tabs[self.get_tab()].text.config(fg="blue")
+
     def color_purple(self, event=None):
         self.tabs[self.get_tab()].text.config(fg="purple")
 
@@ -431,62 +445,77 @@ class TextWindow(tk.Frame):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 8))
         current_size = 8
+
     def size9(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 9))
         current_size = 9
+
     def size10(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 10))
         current_size = 10
+
     def size11(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 11))
         current_size = 11
+
     def size12(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 12))
         current_size = 12
+
     def size14(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 14))
         current_size = 14
+
     def size16(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 16))
         current_size = 16
+
     def size18(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 18))
         current_size = 18
+
     def size20(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 20))
         current_size = 20
+
     def size22(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 22))
         current_size = 22
+
     def size24(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 24))
         current_size = 24
+
     def size26(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 26))
         current_size = 26
+
     def size28(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 28))
         current_size = 28
+
     def size36(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 36))
         current_size = 36
+
     def size48(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 48))
         current_size = 48
+
     def size72(self, event=None):
         global current_font, current_size
         self.tabs[self.get_tab()].text.config(font=(current_font, 72))
@@ -494,8 +523,10 @@ class TextWindow(tk.Frame):
 
     def theme_day(self, event=None):
         self.tabs[self.get_tab()].text.config(background="White")
+
     def theme_dark(self, event=None):
         self.tabs[self.get_tab()].text.config(background="Black")
+
     ##########################################################
 
     def wrap(self):
@@ -524,18 +555,18 @@ class TextWindow(tk.Frame):
     #     self.tabs[self.get_tab()].text.after(interval, self.key_listen)
 
     # changes tab from 8 spaces to 4
-    #font = tkfont.Font(font=text['font'])  # get font associated with Text widget
-    #tab_width = font.measure(' ' * 4)  # compute desired width of tabs
-    #text.config(tabs=(tab_width,))  # configure Text widget tab stops
+    # font = tkfont.Font(font=text['font'])  # get font associated with Text widget
+    # tab_width = font.measure(' ' * 4)  # compute desired width of tabs
+    # text.config(tabs=(tab_width,))  # configure Text widget tab stops
 
     def get_whitespace(self):
         line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
         print(line_text)
         count = 0
         for i in line_text:
-            if i==" ":
+            if i == " ":
                 count = count + 1
-            elif i=="\t":
+            elif i == "\t":
                 count = count + 8
             else:
                 break
@@ -551,12 +582,13 @@ class TextWindow(tk.Frame):
         print(line_text)
         count = 0
         for i in line_text:
-            if i==" ":
+            if i == " ":
                 count = count + 1
-            elif i=="\t":
+            elif i == "\t":
                 count = count + 8
             else:
                 break
+
         def onStart():
             print("starting")
 
@@ -572,12 +604,13 @@ class TextWindow(tk.Frame):
         print(line_text)
         count = 0
         for i in line_text:
-            if i==" ":
+            if i == " ":
                 count = count + 1
-            elif i=="\t":
+            elif i == "\t":
                 count = count + 8
             else:
                 break
+
         def onStart():
             print("starting")
 
@@ -588,17 +621,16 @@ class TextWindow(tk.Frame):
         engine.say(line_text)
         engine.runAndWait()
 
-
-
     def leftclick(self, event):
         self.get_whitespace()
 
     def help_pop(self, event=None):
-        messagebox.showinfo("Help","Hotkeys:\n\n Ctrl O: Open file \n\n Ctrl S: Save file \n\n Ctrl Y: Redo \n\n Ctrl Z: Undo \n\n Alt W: Say Whitespace")
+        messagebox.showinfo("Help",
+                            "Hotkeys:\n\n Ctrl O: Open file \n\n Ctrl S: Save file \n\n Ctrl Y: Redo \n\n Ctrl Z: Undo \n\n Alt W: Say Whitespace")
 
     def about_pop(self, event=None):
-        messagebox.showinfo("About us","Team name: Bits and Pieces \n\n Members: \n Daniel Merlino \n Jose Duarte \n Stephen Lederer \n Travis Pete")
-
+        messagebox.showinfo("About us",
+                            "Team name: Bits and Pieces \n\n Members: \n Daniel Merlino \n Jose Duarte \n Stephen Lederer \n Travis Pete")
 
     def paste(self):
         try:
@@ -882,7 +914,6 @@ class TextWindow(tk.Frame):
 #         self.after(30, self.redraw)
 
 
-
 # class CustomText(tk.Text):
 #     def __init__(self, *args, **kwargs):
 #         tk.Text.__init__(self, *args, **kwargs)
@@ -911,7 +942,7 @@ class TextWindow(tk.Frame):
 #             # return what the actual widget returned
 #             return result
 
-#def main():
+# def main():
 #    root = tk.Tk()
 #    app = TextWindow(root)
 #    root.mainloop()
@@ -921,7 +952,7 @@ if __name__ == '__main__':
     root = tk.Tk()
     app = TextWindow(root)
     root.wm_state('normal')
-    #text = TextWindow(root).pack(side="top", fill="both", expand=True)
+    # text = TextWindow(root).pack(side="top", fill="both", expand=True)
     image = PhotoImage(file="viper.png")
     root.tk.call('wm', 'iconphoto', root._w, image)
     root.mainloop()
