@@ -7,8 +7,6 @@ import pyttsx3
 import win32com.client as wincl
 
 
-
-
 current_font = "arial"
 current_size = 12
 
@@ -18,10 +16,19 @@ class Document:
         self.file_dir = FileDir
         self.file_name = 'Untitled' if not FileDir else os.path.basename(FileDir)
         self.text = TextWidget
+        self.bookmark_list = []
         #self.text = CustomText(self)
         #self.custom_text = CustomText(self.text)
         self.status = md5(self.text.get(1.0, 'end').encode('utf-8'))
 
+    def get_bookmarks(self):
+        return self.bookmark_list
+
+    def append_bookmark(self, index):
+        self.bookmark_list.append(index)
+
+    def remove_bookmark(self, index):
+        self.bookmark_list.remove(index)
 
 class TextWindow(tk.Frame):
     def __init__(self, master, *args, **kwargs):
@@ -78,6 +85,17 @@ class TextWindow(tk.Frame):
         format_menu.add_checkbutton(label="Word Wrap", onvalue=True, offvalue=False, variable=self.word_wrap,
                                    command=self.wrap)
 
+        # Go To menu
+
+        go_to_menu = Menu(menu_bar, tearoff=0)
+        bookmark_menu = Menu(go_to_menu, tearoff=0)
+        bookmark_menu.add_command(label="Toggle", underline=1, command=self.toggle_bookmark)
+        bookmark_menu.add_command(label="Clear", underline=1, command=self.clear_bookmarks)
+        bookmark_menu.add_command(label="Next", underline=1, command=self.next_bookmark)
+        bookmark_menu.add_command(label="Previous", underline=1, command=self.previous_bookmark)
+        go_to_menu.add_cascade(label="Bookmarks", underline=0, menu=bookmark_menu)
+        go_to_menu.add_command(label="Find", underline=1, command=self.go_to_find)
+        go_to_menu.add_command(label="Line", underline=1, command=self.go_to_line)
         # Format menu
         font_type_menu = tk.Menu(format_menu)
         format_menu.add_cascade(label="Font Type", underline=1, menu=font_type_menu)
@@ -140,6 +158,7 @@ class TextWindow(tk.Frame):
         # Attach to Menu Bar
         menu_bar.add_cascade(label="File", menu=file_menu)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
+        menu_bar.add_cascade(label="Go To", menu=go_to_menu)
         menu_bar.add_cascade(label="Format", underline=1, menu=format_menu)
         menu_bar.add_cascade(label="Debug", underline=1)
         menu_bar.add_cascade(label="Help", underline=1, menu=help_menu, )
@@ -504,6 +523,11 @@ class TextWindow(tk.Frame):
     #     self.tabs[self.get_tab()].text.bind("<<CursorChange>>", self.get_whitespace())
     #     self.tabs[self.get_tab()].text.after(interval, self.key_listen)
 
+    # changes tab from 8 spaces to 4
+    #font = tkfont.Font(font=text['font'])  # get font associated with Text widget
+    #tab_width = font.measure(' ' * 4)  # compute desired width of tabs
+    #text.config(tabs=(tab_width,))  # configure Text widget tab stops
+
     def get_whitespace(self):
         line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
         print(line_text)
@@ -658,7 +682,6 @@ class TextWindow(tk.Frame):
     def move_tab(self, event):
         '''
         Check if there is more than one tab.
-
         Use the y-coordinate of the current tab so that if the user moves the mouse up / down
         out of the range of the tabs, the left / right movement still moves the tab.
         '''
@@ -672,6 +695,167 @@ class TextWindow(tk.Frame):
 
     def _on_change(self, event):
         self.linenumbers.redraw()
+
+    def toggle_bookmark(self):
+        try:
+            insertion_position = self.tabs[self.get_tab()].text.index("insert")
+            start_line_column = insertion_position.split(".")
+            insert_line_column = start_line_column[0] + ".0"
+
+            if len(self.tabs[self.get_tab()].get_bookmarks()) == 0:
+                # dont check if any tag already exists, add tag and increment count
+                self.tabs[self.get_tab()].text.mark_set("book0", insert_line_column)
+                self.tabs[self.get_tab()].append_bookmark(0)
+            else:
+                # iterate thru bookmarks, populate index list, add/remove accordingly
+
+                bookmark_index_list = []
+                for iterator in self.tabs[self.get_tab()].get_bookmarks():
+                    tag_name = "book" + str(iterator)
+                    tag_index = self.tabs[self.get_tab()].text.index(tag_name)  # format is 1.0
+                    line_column = tag_index.split(".")
+                    index = line_column[0]
+                    bookmark_index_list.append(index)
+
+                # check if this line is already tagged
+                if start_line_column[0] not in bookmark_index_list:
+                    iterator += 1
+                    self.tabs[self.get_tab()].append_bookmark(iterator)
+                    tag_name = "book" + str(iterator)
+                    self.tabs[self.get_tab()].text.mark_set(tag_name, insert_line_column)
+                    self.tabs[self.get_tab()].append_bookmark(iterator)
+                else:
+                    # find tag_name with matching line/index, remove tag from text, remove book # from list
+
+                    for iterator in self.tabs[self.get_tab()].get_bookmarks():
+                        tag_name = "book" + str(iterator)
+                        tag_index = self.tabs[self.get_tab()].text.index(tag_name)
+                        line_column = tag_index.split(".")
+                        index = line_column[0]
+                        if start_line_column[0] == index:
+                            self.tabs[self.get_tab()].text.mark_unset(tag_name)
+                            self.tabs[self.get_tab()].remove_bookmark(iterator)
+        except:
+            print("Failed to set bookmark")
+
+    def clear_bookmarks(self):
+        try:
+            if len(self.tabs[self.get_tab()].get_bookmarks()) > 0:
+                remove_list = []
+                for iterator in self.tabs[self.get_tab()].get_bookmarks():
+                    remove_list.append(iterator)
+                for iterator in remove_list:
+                    tag_name = "book" + str(iterator)
+                    self.tabs[self.get_tab()].text.mark_unset(tag_name)
+                    self.tabs[self.get_tab()].remove_bookmark(iterator)
+        except:
+            print("Failed to clear bookmarks")
+
+    def next_bookmark(self):
+        if len(self.tabs[self.get_tab()].get_bookmarks()) > 0:
+            insertion_position = self.tabs[self.get_tab()].text.index("insert")
+
+            bookmark_index_list = []
+            for iterator in self.tabs[self.get_tab()].get_bookmarks():
+                tag_name = "book" + str(iterator)
+                tag_index = self.tabs[self.get_tab()].text.index(tag_name)  # format is 1.0
+                line_column = tag_index.split(".")
+                index = line_column[0]
+                bookmark_index_list.append(index)
+                bookmark_index_list.sort(reverse=False)
+
+            start_line = insertion_position.split(".")
+            start_line = int(start_line[0])
+            first_entry_flag = True
+            for bookmark_line in bookmark_index_list:
+                bookmarked_line = int(bookmark_line)
+                # not empty
+                if len(bookmark_index_list) > 0:
+                    # only 1 bookmark
+                    if len(bookmark_index_list) < 2:
+                        next_line = bookmarked_line
+                    # more than 1 bookmarks
+                    if bookmarked_line > start_line:
+                        if first_entry_flag:
+                            next_line = bookmarked_line
+                            first_entry_flag = False
+                    # default to first item if there are no bookmarked line #s greater than the current line
+                    else:
+                        next_line = bookmark_index_list[0]
+
+            message = "Next bookmarked line is " + str(next_line)
+            print(message)
+            self.see_line(next_line)
+
+    def previous_bookmark(self):
+        if len(self.tabs[self.get_tab()].get_bookmarks()) > 0:
+            insertion_position = self.tabs[self.get_tab()].text.index("insert")
+
+            bookmark_index_list = []
+            for iterator in self.tabs[self.get_tab()].get_bookmarks():
+                tag_name = "book" + str(iterator)
+                tag_index = self.tabs[self.get_tab()].text.index(tag_name)  # format is 1.0
+                line_column = tag_index.split(".")
+                index = line_column[0]
+                bookmark_index_list.append(index)
+                bookmark_index_list.sort(reverse=True)
+
+            start_line = insertion_position.split(".")
+            start_line = int(start_line[0])
+            first_entry_flag = True
+            for bookmark_line in bookmark_index_list:
+                bookmarked_line = int(bookmark_line)
+                # not empty
+                if len(bookmark_index_list) > 0:
+                    # only 1 bookmark
+                    if len(bookmark_index_list) < 2:
+                        next_line = bookmarked_line
+                    # more than 1 bookmarks
+                    if bookmarked_line < start_line:
+                        if first_entry_flag:
+                            next_line = bookmarked_line
+                            first_entry_flag = False
+                    # default to first item if there are no bookmarked line #s greater than the current line
+                    else:
+                        next_line = bookmark_index_list[0]
+            message = "Previous bookmarked line is " + str(next_line)
+            print(message)
+            self.see_line(next_line)
+
+    # add find next? to cycle through all matches
+    # starts from line 1, not insertion point
+    def go_to_find(self):
+        try:
+            find_string = simpledialog.askstring("Find", "Find:")
+            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c")
+            if editor_text.find(find_string) != -1:
+                line_count = 1
+                for line in editor_text.split('\n'):
+                    if find_string in line:
+                        self.see_line(line_count)
+                        break
+                    line_count += 1
+
+            else:
+                print("Text was not found")
+        except:
+            print("Failed to go to find text")
+
+    def go_to_line(self):
+        try:
+            # set insertion position to inputted line #
+            go_to_line_number = simpledialog.askinteger("Go To Line", "Line #:")
+            if go_to_line_number is not None:
+                self.see_line(go_to_line_number)
+            else:
+                print("Failed to go to line #")
+        except:
+            print("Failed to go to line #")
+
+    def see_line(self, line_num):
+        see_line_position = str(line_num) + ".0"
+        self.tabs[self.get_tab()].text.see(see_line_position)
+        self.tabs[self.get_tab()].text.mark_set('insert', see_line_position)
 
 
 # class TextLineNumbers(tk.Canvas):
