@@ -1090,9 +1090,10 @@ class TextWindow(tk.Frame):
                         if find_count > 0:
                             offset = line.find(find_string, insert_column)
                             if offset != -1:
-                                target_was_found = True
-                                self.see_line_column(line_count, offset, len(find_string), editor_text, find_string)
-                                break
+                                if line_count != insert_line and offset >= insert_column:
+                                    target_was_found = True
+                                    self.see_line_column(line_count, offset, len(find_string), editor_text, find_string)
+                                    break
                     line_count += 1
 
                 # cycle from the beginning of text, find 1st instance
