@@ -35,7 +35,7 @@ class FindWindow(tk.Frame):
     def update_label(self, find_count, total_count, line_num, column_num):
         if self.label_text == "N/A":
             self.label_text = str(find_count) + "/" + str(total_count) + "\nLine: " + str(line_num) + " Column: " + str(column_num)
-            label_data =  str(find_count) + " out of " + str(total_count) + "Line " + str(line_num) + " Column " + str(column_num)
+            label_data =  str(find_count) + " out of " + str(total_count) + " Line " + str(line_num) + " Column " + str(column_num)
             self.current_find_out_of_all_label = Label(self.frame, text=self.label_text)
             self.current_find_out_of_all_label.pack(side=tk.BOTTOM)
 
@@ -47,7 +47,7 @@ class FindWindow(tk.Frame):
             self.current_find_out_of_all_label.pack_forget()
 
             self.label_text = str(find_count) + "/" + str(total_count) + "\nLine: " + str(line_num) + " Column: " + str(column_num)
-            label_data = str(find_count) + " out of " + str(total_count) + "Line " + str(line_num) + " Column " + str(column_num)
+            label_data = str(find_count) + " out of " + str(total_count) + " Line " + str(line_num) + " Column " + str(column_num)
             self.current_find_out_of_all_label = Label(self.frame, text=self.label_text)
             self.current_find_out_of_all_label.pack(side=tk.BOTTOM)
 
