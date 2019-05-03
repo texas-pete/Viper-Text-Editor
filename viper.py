@@ -11,64 +11,6 @@ import win32com.client as wincl
 current_font = "arial"
 current_size = 12
 
-class FindWindow(tk.Frame):
-    def __init__(self, master, *args, **kwargs):
-        self.frame = tk.Frame(master, *args, **kwargs)
-        self.frame.pack()
-
-        self.input_text = Entry(self.frame, width=20)
-        self.input_text.pack(side=tk.TOP)
-
-        next_button = tk.Button(self.frame, text="Next", command=self.find_next)
-        next_button.pack(side=tk.LEFT)
-
-        prev_button = tk.Button(self.frame, text="Previous", command=self.find_previous)
-        prev_button.pack(side=tk.LEFT)
-
-        close_find = tk.Button(self.frame, text="Close", command=self.close_frame)
-        close_find.pack(side=tk.LEFT)
-
-        self.label_text = "N/A"
-        self.current_find_out_of_all_label = Label(self.frame, text=self.label_text)
-
-    def update_label(self, find_count, total_count, line_num, column_num):
-        if self.label_text == "N/A":
-            self.label_text = str(find_count) + "/" + str(total_count) + "\nLine: " + str(line_num) + " Column: " + str(
-                column_num)
-            label_data = str(find_count) + " out of " + str(total_count) + " Line " + str(line_num) + " Column " + str(
-                column_num)
-            self.current_find_out_of_all_label = Label(self.frame, text=self.label_text)
-            self.current_find_out_of_all_label.pack(side=tk.BOTTOM)
-
-            engine = pyttsx3.init()
-            engine.say(label_data)
-            engine.runAndWait()
-            engine.stop()
-        else:
-            self.current_find_out_of_all_label.pack_forget()
-
-            self.label_text = str(find_count) + "/" + str(total_count) + "\nLine: " + str(line_num) + " Column: " + str(
-                column_num)
-            label_data = str(find_count) + " out of " + str(total_count) + " Line " + str(line_num) + " Column " + str(
-                column_num)
-            self.current_find_out_of_all_label = Label(self.frame, text=self.label_text)
-            self.current_find_out_of_all_label.pack(side=tk.BOTTOM)
-
-            engine = pyttsx3.init()
-            engine.say(label_data)
-            engine.runAndWait()
-            engine.stop()
-
-    def find_previous(self):
-        find_string = self.input_text.get()
-        app.go_to_find_previous(find_string)
-
-    def find_next(self):
-        find_string = self.input_text.get()
-        app.go_to_find_next(find_string)
-
-    def close_frame(self):
-        self.frame.pack_forget()
 
 class Document:
     def __init__(self, Frame, TextWidget, FileDir=''):
@@ -152,7 +94,7 @@ class TextWindow(tk.Frame):
         bookmark_menu.add_command(label="Next", underline=1, command=self.next_bookmark)
         bookmark_menu.add_command(label="Previous", underline=1, command=self.previous_bookmark)
         go_to_menu.add_cascade(label="Bookmarks", underline=0, menu=bookmark_menu)
-        go_to_menu.add_command(label="Find", underline=1, command=self.go_to_find_window)
+        go_to_menu.add_command(label="Find", underline=1, command=self.go_to_find)
         go_to_menu.add_command(label="Line", underline=1, command=self.go_to_line)
         go_to_menu.add_command(label="Home", underline=1, command=self.top_line, accelerator="Alt+Up")
         go_to_menu.add_command(label="End", underline=1, command=self.bottom_line, accelerator="Alt+Down")
@@ -288,7 +230,6 @@ class TextWindow(tk.Frame):
         text.bind('<Control-s>', self.save_file)
         text.bind('<Control-o>', self.open_file)
         text.bind('<Control-n>', self.new_file)
-        text.bind('<Control-f>', self.go_to_find_window)
         text.bind('<Control-a>', self.select_all)
         text.bind('<Control-w>', self.close_tab)
         text.bind('<Alt-Up>', self.top_line_kb)
@@ -1074,190 +1015,20 @@ class TextWindow(tk.Frame):
             print(message)
             self.see_line(next_line)
 
-    def go_to_find_window(self, *args):
-        self.app2 = FindWindow(root)
+    # add find next? to cycle through all matches
+    # starts from line 1, not insertion point
 
-    # status displaying for column?
-    # using next followed by previous or vice versa will land the same find match. This is due to insertion point
-    def go_to_find_next(self, find_string):
+    def go_to_find(self):
         try:
-            insertion_position = self.tabs[self.get_tab()].text.index("insert")
-            start_line_column = insertion_position.split(".")
-            insert_line = int(start_line_column[0])
-            insert_column = int(start_line_column[1])
-
-            target_was_found = False
-
-            # remove case sensitivity
-            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c").lower()
-
+            find_string = simpledialog.askstring("Find", "Find:")
+            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c")
             if editor_text.find(find_string) != -1:
                 line_count = 1
                 for line in editor_text.split('\n'):
-                    if line_count >= insert_line:
-                        find_count = line.count(find_string)
-                        if find_count > 0:
-                            offset = line.find(find_string, insert_column)
-                            if offset != -1:
-                                target_was_found = True
-                                self.see_line_column(line_count, offset, len(find_string), editor_text, find_string)
-                                break
+                    if find_string in line:
+                        self.see_line(line_count)
+                        break
                     line_count += 1
-
-                # cycle from the beginning of text, find 1st instance
-                if not target_was_found:
-                    # print("searching from beginning of text")
-                    line_count = 1
-                    for line in editor_text.split('\n'):
-                        if find_string in line:
-                            offset = line.find(find_string)
-                            self.see_line_column(line_count, offset, len(find_string), editor_text, find_string)
-                            break
-                        line_count += 1
-            else:
-                print("Text was not found")
-        except:
-            print("Failed to go to find text")
-
-    def go_to_find_previous(self, find_string):
-        try:
-            insertion_position = self.tabs[self.get_tab()].text.index("insert")
-            start_line_column = insertion_position.split(".")
-            insert_line = int(start_line_column[0])
-            insert_column = int(start_line_column[1])
-
-            target_was_found = False
-            find_list = []
-
-            # remove case sensitivity
-            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c").lower()
-
-            if editor_text.find(find_string) != -1:
-                string_list = []
-                for line in editor_text.split('\n'):
-                    string_list.insert(0, line)
-
-                line_count = len(string_list)
-                for line in string_list:
-                    if line_count <= insert_line:
-                        find_count = line.count(find_string)
-                        if find_count > 0:
-                            # find last instance before insert line and column
-                            if find_count == 1:
-                                offset = line.find(find_string)
-                                if line_count == insert_line:
-                                    total_offset = offset + len(find_string)
-                                    if total_offset <= insert_column:
-                                        target_was_found = True
-                                        self.see_line_column(line_count, offset, -1, editor_text, find_string)
-                                        break
-                                else:
-                                    target_was_found = True
-                                    self.see_line_column(line_count, offset, -1, editor_text, find_string)
-                                    break
-                            else:
-                                iterator = 0
-                                find_list = []
-                                while iterator < find_count:
-
-                                    if iterator == 0:
-                                        find_position = line.find(find_string)
-                                        shifting_index = find_position + 1
-                                        find_list.append(find_position)
-
-                                    else:
-                                        find_position = line.find(find_string, shifting_index)
-                                        shifting_index = find_position + 1
-                                        find_list.append(find_position)
-
-                                    iterator += 1
-
-                                iterator = -1
-
-                                # find all in line, iterate from the last to first
-                                for find_list_item in find_list:
-                                    if find_list[iterator] < insert_column:
-                                        offset = find_list[iterator]
-                                        target_was_found = True
-                                        self.see_line_column(line_count, offset, -1, editor_text, find_string)
-                                        break
-
-                                    iterator -= 1
-
-                                if target_was_found:
-                                    break
-                    line_count -= 1
-
-                # cycle back to the end of text, find last instance
-                if not target_was_found:
-
-                    # check if target is in line but exists after the insertion point
-                    if len(find_list) > 0:
-                        # print("searching through previous lines and getting the last find in its list")
-                        line_count = len(string_list)
-                        for line in string_list:
-                            if insert_line == 1:
-                                insert_line = line_count + 1
-                            if line_count < insert_line:
-                                find_count = line.count(find_string)
-                                if find_count > 0:
-                                    # find last instance before insert line and column
-                                    if find_count == 1:
-                                        offset = line.find(find_string)
-                                        self.see_line_column(line_count, offset, -1, editor_text, find_string)
-                                        break
-                                    else:
-                                        iterator = 0
-                                        find_list = []
-                                        while iterator < find_count:
-
-                                            if iterator == 0:
-                                                find_position = line.find(find_string)
-                                                shifting_index = find_position + 1
-                                                find_list.append(find_position)
-
-                                            else:
-                                                find_position = line.find(find_string, shifting_index)
-                                                shifting_index = find_position + 1
-                                                find_list.append(find_position)
-
-                                            iterator += 1
-
-                                        iterator = -1
-                                        offset = find_list[iterator]
-                                        self.see_line_column(line_count, offset, -1, editor_text, find_string)
-                                        break
-
-                            line_count -= 1
-
-                    else:
-                        # print("searching from end of text")
-
-                        line_count = len(string_list)
-                        for line in string_list:
-                            if find_string in line:
-                                iterator = 0
-                                find_list = []
-                                find_count = line.count(find_string)
-                                while iterator < find_count:
-
-                                    if iterator == 0:
-                                        find_position = line.find(find_string)
-                                        shifting_index = find_position + 1
-                                        find_list.append(find_position)
-
-                                    else:
-                                        find_position = line.find(find_string, shifting_index)
-                                        shifting_index = find_position + 1
-                                        find_list.append(find_position)
-
-                                    iterator += 1
-
-                                offset = find_list[-1]
-                                self.see_line_column(line_count, offset, 0, editor_text, find_string)
-                                # print(find_list)
-                                break
-                            line_count -= 1
 
             else:
                 print("Text was not found")
