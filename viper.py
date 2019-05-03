@@ -3,12 +3,72 @@ from tkinter import *
 from tkinter import Tk, ttk, Text, Scrollbar, Menu, messagebox, filedialog, Frame, PhotoImage, simpledialog, Button
 import os, subprocess, json, string, keyboard
 from hashlib import md5
-import pyttsx3
+import pyttsx3, math
+import tkinter.font as tkfont
 import win32com.client as wincl
+#(pylint_stdout, pylint_stderr) = lint.py_run('test.py', return_std=True)
 
 current_font = "arial"
 current_size = 12
 
+class FindWindow(tk.Frame):
+    def __init__(self, master, *args, **kwargs):
+        self.frame = tk.Frame(master, *args, **kwargs)
+        self.frame.pack()
+
+        self.input_text = Entry(self.frame, width=20)
+        self.input_text.pack(side=tk.TOP)
+
+        next_button = tk.Button(self.frame, text="Next", command=self.find_next)
+        next_button.pack(side=tk.LEFT)
+
+        prev_button = tk.Button(self.frame, text="Previous", command=self.find_previous)
+        prev_button.pack(side=tk.LEFT)
+
+        close_find = tk.Button(self.frame, text="Close", command=self.close_frame)
+        close_find.pack(side=tk.LEFT)
+
+        self.label_text = "N/A"
+        self.current_find_out_of_all_label = Label(self.frame, text=self.label_text)
+
+    def update_label(self, find_count, total_count, line_num, column_num):
+        if self.label_text == "N/A":
+            self.label_text = str(find_count) + "/" + str(total_count) + "\nLine: " + str(line_num) + " Column: " + str(
+                column_num)
+            label_data = str(find_count) + " out of " + str(total_count) + " Line " + str(line_num) + " Column " + str(
+                column_num)
+            self.current_find_out_of_all_label = Label(self.frame, text=self.label_text)
+            self.current_find_out_of_all_label.pack(side=tk.BOTTOM)
+
+            engine = pyttsx3.init()
+            engine.say(label_data)
+            engine.runAndWait()
+            engine.stop()
+        else:
+            self.current_find_out_of_all_label.pack_forget()
+
+            self.label_text = str(find_count) + "/" + str(total_count) + "\nLine: " + str(line_num) + " Column: " + str(
+                column_num)
+            label_data = str(find_count) + " out of " + str(total_count) + " Line " + str(line_num) + " Column " + str(
+                column_num)
+            self.current_find_out_of_all_label = Label(self.frame, text=self.label_text)
+            self.current_find_out_of_all_label.pack(side=tk.BOTTOM)
+
+            engine = pyttsx3.init()
+            engine.say(label_data)
+            engine.runAndWait()
+            engine.stop()
+
+    def find_previous(self):
+        find_string = self.input_text.get()
+        app.go_to_find_previous(find_string)
+
+    def find_next(self):
+        find_string = self.input_text.get()
+        app.go_to_find_next(find_string)
+
+    def close_frame(self):
+        self.frame.pack_forget()
 
 class Document:
     def __init__(self, Frame, TextWidget, FileDir=''):
@@ -85,7 +145,6 @@ class TextWindow(tk.Frame):
                                     command=self.wrap)
 
         # Go To menu
-
         go_to_menu = Menu(menu_bar, tearoff=0)
         bookmark_menu = Menu(go_to_menu, tearoff=0)
         bookmark_menu.add_command(label="Toggle", underline=1, command=self.toggle_bookmark)
@@ -93,8 +152,11 @@ class TextWindow(tk.Frame):
         bookmark_menu.add_command(label="Next", underline=1, command=self.next_bookmark)
         bookmark_menu.add_command(label="Previous", underline=1, command=self.previous_bookmark)
         go_to_menu.add_cascade(label="Bookmarks", underline=0, menu=bookmark_menu)
-        go_to_menu.add_command(label="Find", underline=1, command=self.go_to_find)
+        go_to_menu.add_command(label="Find", underline=1, command=self.go_to_find_window)
         go_to_menu.add_command(label="Line", underline=1, command=self.go_to_line)
+        go_to_menu.add_command(label="Home", underline=1, command=self.top_line, accelerator="Alt+Up")
+        go_to_menu.add_command(label="End", underline=1, command=self.bottom_line, accelerator="Alt+Down")
+
         # Format menu
         font_type_menu = tk.Menu(format_menu)
         format_menu.add_cascade(label="Font Type", underline=1, menu=font_type_menu)
@@ -167,6 +229,7 @@ class TextWindow(tk.Frame):
         # Create right-click menu.
         self.right_click_menu = tk.Menu(self.master, tearoff=0)
         self.right_click_menu.add_command(label="Undo", command=self.undo)
+        self.right_click_menu.add_command(label="Redo", command=self.redo)
         self.right_click_menu.add_separator()
         self.right_click_menu.add_command(label="Cut", command=self.cut)
         self.right_click_menu.add_command(label="Copy", command=self.copy)
@@ -196,6 +259,7 @@ class TextWindow(tk.Frame):
         self.master.bind('<Alt-w>', self.leftclick)
         self.master.bind('<Up>', self.get_whitespace2)
         self.master.bind('<Down>', self.get_whitespace3)
+
         # if (#args[0] in ("insert", "replace", "delete") or
         #         #args[0:3] == ("mark", "set", "insert") or
         #         args[0:2] == ("yview", "moveto")
@@ -224,11 +288,19 @@ class TextWindow(tk.Frame):
         text.bind('<Control-s>', self.save_file)
         text.bind('<Control-o>', self.open_file)
         text.bind('<Control-n>', self.new_file)
+        text.bind('<Control-f>', self.go_to_find_window)
         text.bind('<Control-a>', self.select_all)
         text.bind('<Control-w>', self.close_tab)
+        text.bind('<Alt-Up>', self.top_line_kb)
+        text.bind('<Alt-Down>', self.bottom_line_kb)
         text.bind('<Button-3>', self.right_click)
         text.bind('<F11>', self.about_pop)
         text.bind('<F12>', self.help_pop)
+        #Key Binding Toggle Functions Has Caused Issues With The Functions Performing Properly
+        #text.bind('<Alt-Shift-T>', self.toggle_bookmark_kb)
+        #text.bind('<Alt-Shift-C>', self.clear_bookmarks_kb)
+        #text.bind('<Alt-Shift-N>', self.next_bookmark_kb)
+        #text.bind('<Alt-Shift-P>', self.previous_bookmark_kb)
 
         # Pack the text
         text.pack(fill='both', expand=True)
@@ -250,6 +322,10 @@ class TextWindow(tk.Frame):
         #     #self.get_whitespace()
         #
         # text.bind("<<CursorChange>>", self.get_whitespace())
+
+        font = tkfont.Font(font = text['font'])
+        tab_width = font.measure(' ' * 4)
+        text.config(tabs = (tab_width,))
 
         return text
 
@@ -525,7 +601,7 @@ class TextWindow(tk.Frame):
         self.tabs[self.get_tab()].text.config(background="White")
 
     def theme_dark(self, event=None):
-        self.tabs[self.get_tab()].text.config(background="Black")
+        self.tabs[self.get_tab()].text.config(background="Gray")
 
     ##########################################################
 
@@ -560,6 +636,9 @@ class TextWindow(tk.Frame):
     # text.config(tabs=(tab_width,))  # configure Text widget tab stops
 
     def get_whitespace(self):
+        line_index = self.tabs[self.get_tab()].text.index("insert linestart")
+        intdex = int(float(line_index))
+        math.trunc(intdex)
         line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
         print(line_text)
         count = 0
@@ -567,17 +646,65 @@ class TextWindow(tk.Frame):
             if i == " ":
                 count = count + 1
             elif i == "\t":
-                count = count + 8
+                count = count + 4
             else:
                 break
+
+        for i in line_text:
+            if i == '!':
+                line_text = line_text.replace("!", " bang ")
+            elif i == ",":
+                line_text = line_text.replace(",", " comma ")
+            elif i == "(":
+                line_text = line_text.replace("(", " left paren ")
+            elif i == ")":
+                line_text = line_text.replace(")", " right paren ")
+            elif i == "[":
+                line_text = line_text.replace("[", " left bracket ")
+            elif i == "]":
+                line_text = line_text.replace("]", " right bracket ")
+            elif i == "{":
+                line_text = line_text.replace("{", " left brace  ")
+            elif i == "}":
+                line_text = line_text.replace("}", " right brace ")
+            elif i == ":":
+                line_text = line_text.replace(":", " colon ")
+            elif i == ";":
+                line_text = line_text.replace(";", " semi ")
+            elif i == "?":
+                line_text = line_text.replace("?", " question ")
+            elif i == "|":
+                line_text = line_text.replace("|", " bar ")
+            elif i == "<":
+                line_text = line_text.replace("<", " less ")
+            elif i == ">":
+                line_text = line_text.replace(">", " greater ")
+            elif i == "\"":
+                line_text = line_text.replace("\"", " quote ")
+            elif i == "'":
+                line_text = line_text.replace("'", " tic ")
+            elif i == "-":
+                line_text = line_text.replace("-", " dash ")
+            elif i == "`":
+                line_text = line_text.replace("`", " grav ")
+            elif i == "~":
+                line_text = line_text.replace("~", " tilda ")
+            elif i == "*":
+                line_text = line_text.replace("*", " star ")
+            elif i == ".":
+                line_text = line_text.replace(".", " dot ")
+
         print(count)
         engine = pyttsx3.init()
-        engine.say("White space is " + str(count))
+        engine.say("Line number is " + str(intdex) + "White space is " + str(count))
         engine.say(line_text)
         engine.runAndWait()
         engine.stop()
 
     def get_whitespace2(self, event):
+        line_index = self.tabs[self.get_tab()].text.index("insert linestart")
+        intdex = int(float(line_index))
+        math.trunc(intdex)
         line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
         print(line_text)
         count = 0
@@ -585,9 +712,55 @@ class TextWindow(tk.Frame):
             if i == " ":
                 count = count + 1
             elif i == "\t":
-                count = count + 8
+                count = count + 4
+            elif i == ",":
+                line_text = line_text.replace(","," comma ")
             else:
                 break
+
+        for i in line_text:
+            if i == '!':
+                line_text = line_text.replace("!", " bang ")
+            elif i == ",":
+                line_text = line_text.replace(",", " comma ")
+            elif i == "(":
+                line_text = line_text.replace("(", " left paren ")
+            elif i == ")":
+                line_text = line_text.replace(")", " right paren ")
+            elif i == "[":
+                line_text = line_text.replace("[", " left bracket ")
+            elif i == "]":
+                line_text = line_text.replace("]", " right bracket ")
+            elif i == "{":
+                line_text = line_text.replace("{", " left brace  ")
+            elif i == "}":
+                line_text = line_text.replace("}", " right brace ")
+            elif i == ":":
+                line_text = line_text.replace(":", " colon ")
+            elif i == ";":
+                line_text = line_text.replace(";", " semi ")
+            elif i == "?":
+                line_text = line_text.replace("?", " question ")
+            elif i == "|":
+                line_text = line_text.replace("|", " bar ")
+            elif i == "<":
+                line_text = line_text.replace("<", " less ")
+            elif i == ">":
+                line_text = line_text.replace(">", " greater ")
+            elif i == "\"":
+                line_text = line_text.replace("\"", " quote ")
+            elif i == "'":
+                line_text = line_text.replace("'", " tic ")
+            elif i == "-":
+                line_text = line_text.replace("-", " dash ")
+            elif i == "`":
+                line_text = line_text.replace("`", " grav ")
+            elif i == "~":
+                line_text = line_text.replace("~", " tilda ")
+            elif i == "*":
+                line_text = line_text.replace("*", " star ")
+            elif i == ".":
+                line_text = line_text.replace(".", " dot ")
 
         def onStart():
             print("starting")
@@ -595,11 +768,14 @@ class TextWindow(tk.Frame):
         engine = pyttsx3.init()
         print(count)
         engine.connect('started-uttrance', onStart)
-        engine.say("White space is " + str(count))
+        engine.say("Line number is " + str(intdex) + "White space is " + str(count))
         engine.say(line_text)
         engine.runAndWait()
 
     def get_whitespace3(self, event):
+        line_index = self.tabs[self.get_tab()].text.index("insert linestart")
+        intdex = int(float(line_index))
+        math.trunc(intdex)
         line_text = self.tabs[self.get_tab()].text.get("insert linestart", "insert lineend")
         print(line_text)
         count = 0
@@ -607,9 +783,53 @@ class TextWindow(tk.Frame):
             if i == " ":
                 count = count + 1
             elif i == "\t":
-                count = count + 8
+                count = count + 4
             else:
                 break
+
+        for i in line_text:
+            if i == '!':
+                line_text = line_text.replace("!", " bang ")
+            elif i == ",":
+                line_text = line_text.replace(",", " comma ")
+            elif i == "(":
+                line_text = line_text.replace("(", " left paren ")
+            elif i == ")":
+                line_text = line_text.replace(")", " right paren ")
+            elif i == "[":
+                line_text = line_text.replace("[", " left bracket ")
+            elif i == "]":
+                line_text = line_text.replace("]", " right bracket ")
+            elif i == "{":
+                line_text = line_text.replace("{", " left brace  ")
+            elif i == "}":
+                line_text = line_text.replace("}", " right brace ")
+            elif i == ":":
+                line_text = line_text.replace(":", " colon ")
+            elif i == ";":
+                line_text = line_text.replace(";", " semi ")
+            elif i == "?":
+                line_text = line_text.replace("?", " question ")
+            elif i == "|":
+                line_text = line_text.replace("|", " bar ")
+            elif i == "<":
+                line_text = line_text.replace("<", " less ")
+            elif i == ">":
+                line_text = line_text.replace(">", " greater ")
+            elif i == "\"":
+                line_text = line_text.replace("\"", " quote ")
+            elif i == "'":
+                line_text = line_text.replace("'", " tic ")
+            elif i == "-":
+                line_text = line_text.replace("-", " dash ")
+            elif i == "`":
+                line_text = line_text.replace("`", " grav ")
+            elif i == "~":
+                line_text = line_text.replace("~", " tilda ")
+            elif i == "*":
+                line_text = line_text.replace("*", " star ")
+            elif i == ".":
+                line_text = line_text.replace(".", " dot ")
 
         def onStart():
             print("starting")
@@ -617,7 +837,7 @@ class TextWindow(tk.Frame):
         engine = pyttsx3.init()
         print(count)
         engine.connect('started-uttrance', onStart)
-        engine.say("White space is " + str(count))
+        engine.say("Line number is " + str(intdex) + "White space is " + str(count))
         engine.say(line_text)
         engine.runAndWait()
 
@@ -854,19 +1074,190 @@ class TextWindow(tk.Frame):
             print(message)
             self.see_line(next_line)
 
-    # add find next? to cycle through all matches
-    # starts from line 1, not insertion point
-    def go_to_find(self):
+    def go_to_find_window(self, *args):
+        self.app2 = FindWindow(root)
+
+    # status displaying for column?
+    # using next followed by previous or vice versa will land the same find match. This is due to insertion point
+    def go_to_find_next(self, find_string):
         try:
-            find_string = simpledialog.askstring("Find", "Find:")
-            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c")
+            insertion_position = self.tabs[self.get_tab()].text.index("insert")
+            start_line_column = insertion_position.split(".")
+            insert_line = int(start_line_column[0])
+            insert_column = int(start_line_column[1])
+
+            target_was_found = False
+
+            # remove case sensitivity
+            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c").lower()
+
             if editor_text.find(find_string) != -1:
                 line_count = 1
                 for line in editor_text.split('\n'):
-                    if find_string in line:
-                        self.see_line(line_count)
-                        break
+                    if line_count >= insert_line:
+                        find_count = line.count(find_string)
+                        if find_count > 0:
+                            offset = line.find(find_string, insert_column)
+                            if offset != -1:
+                                target_was_found = True
+                                self.see_line_column(line_count, offset, len(find_string), editor_text, find_string)
+                                break
                     line_count += 1
+
+                # cycle from the beginning of text, find 1st instance
+                if not target_was_found:
+                    # print("searching from beginning of text")
+                    line_count = 1
+                    for line in editor_text.split('\n'):
+                        if find_string in line:
+                            offset = line.find(find_string)
+                            self.see_line_column(line_count, offset, len(find_string), editor_text, find_string)
+                            break
+                        line_count += 1
+            else:
+                print("Text was not found")
+        except:
+            print("Failed to go to find text")
+
+    def go_to_find_previous(self, find_string):
+        try:
+            insertion_position = self.tabs[self.get_tab()].text.index("insert")
+            start_line_column = insertion_position.split(".")
+            insert_line = int(start_line_column[0])
+            insert_column = int(start_line_column[1])
+
+            target_was_found = False
+            find_list = []
+
+            # remove case sensitivity
+            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c").lower()
+
+            if editor_text.find(find_string) != -1:
+                string_list = []
+                for line in editor_text.split('\n'):
+                    string_list.insert(0, line)
+
+                line_count = len(string_list)
+                for line in string_list:
+                    if line_count <= insert_line:
+                        find_count = line.count(find_string)
+                        if find_count > 0:
+                            # find last instance before insert line and column
+                            if find_count == 1:
+                                offset = line.find(find_string)
+                                if line_count == insert_line:
+                                    total_offset = offset + len(find_string)
+                                    if total_offset <= insert_column:
+                                        target_was_found = True
+                                        self.see_line_column(line_count, offset, -1, editor_text, find_string)
+                                        break
+                                else:
+                                    target_was_found = True
+                                    self.see_line_column(line_count, offset, -1, editor_text, find_string)
+                                    break
+                            else:
+                                iterator = 0
+                                find_list = []
+                                while iterator < find_count:
+
+                                    if iterator == 0:
+                                        find_position = line.find(find_string)
+                                        shifting_index = find_position + 1
+                                        find_list.append(find_position)
+
+                                    else:
+                                        find_position = line.find(find_string, shifting_index)
+                                        shifting_index = find_position + 1
+                                        find_list.append(find_position)
+
+                                    iterator += 1
+
+                                iterator = -1
+
+                                # find all in line, iterate from the last to first
+                                for find_list_item in find_list:
+                                    if find_list[iterator] < insert_column:
+                                        offset = find_list[iterator]
+                                        target_was_found = True
+                                        self.see_line_column(line_count, offset, -1, editor_text, find_string)
+                                        break
+
+                                    iterator -= 1
+
+                                if target_was_found:
+                                    break
+                    line_count -= 1
+
+                # cycle back to the end of text, find last instance
+                if not target_was_found:
+
+                    # check if target is in line but exists after the insertion point
+                    if len(find_list) > 0:
+                        # print("searching through previous lines and getting the last find in its list")
+                        line_count = len(string_list)
+                        for line in string_list:
+                            if insert_line == 1:
+                                insert_line = line_count + 1
+                            if line_count < insert_line:
+                                find_count = line.count(find_string)
+                                if find_count > 0:
+                                    # find last instance before insert line and column
+                                    if find_count == 1:
+                                        offset = line.find(find_string)
+                                        self.see_line_column(line_count, offset, -1, editor_text, find_string)
+                                        break
+                                    else:
+                                        iterator = 0
+                                        find_list = []
+                                        while iterator < find_count:
+
+                                            if iterator == 0:
+                                                find_position = line.find(find_string)
+                                                shifting_index = find_position + 1
+                                                find_list.append(find_position)
+
+                                            else:
+                                                find_position = line.find(find_string, shifting_index)
+                                                shifting_index = find_position + 1
+                                                find_list.append(find_position)
+
+                                            iterator += 1
+
+                                        iterator = -1
+                                        offset = find_list[iterator]
+                                        self.see_line_column(line_count, offset, -1, editor_text, find_string)
+                                        break
+
+                            line_count -= 1
+
+                    else:
+                        # print("searching from end of text")
+
+                        line_count = len(string_list)
+                        for line in string_list:
+                            if find_string in line:
+                                iterator = 0
+                                find_list = []
+                                find_count = line.count(find_string)
+                                while iterator < find_count:
+
+                                    if iterator == 0:
+                                        find_position = line.find(find_string)
+                                        shifting_index = find_position + 1
+                                        find_list.append(find_position)
+
+                                    else:
+                                        find_position = line.find(find_string, shifting_index)
+                                        shifting_index = find_position + 1
+                                        find_list.append(find_position)
+
+                                    iterator += 1
+
+                                offset = find_list[-1]
+                                self.see_line_column(line_count, offset, 0, editor_text, find_string)
+                                # print(find_list)
+                                break
+                            line_count -= 1
 
             else:
                 print("Text was not found")
@@ -889,6 +1280,55 @@ class TextWindow(tk.Frame):
         self.tabs[self.get_tab()].text.see(see_line_position)
         self.tabs[self.get_tab()].text.mark_set('insert', see_line_position)
 
+    def top_line(self):
+        try:
+            # set insertion position to inputted line #
+            go_to_line_number = 0
+            if go_to_line_number is not None:
+                self.see_line(go_to_line_number)
+                self.get_whitespace()
+            else:
+                print("Failed to go to line #")
+        except:
+            print("Failed to go to line #")
+
+    def top_line_kb(self, event):
+        try:
+            # set insertion position to inputted line #
+            go_to_line_number = 0
+            if go_to_line_number is not None:
+                self.see_line(go_to_line_number)
+            else:
+                print("Failed to go to line #")
+        except:
+            print("Failed to go to line #")
+
+    def bottom_line(self):
+        try:
+            # set insertion position to inputted line #
+            print(self.tabs[self.get_tab()])
+            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c")
+            go_to_line_number = len(editor_text.split('\n'))
+            if go_to_line_number is not None:
+                self.see_line(go_to_line_number)
+                self.get_whitespace()
+            else:
+                print("Failed to go to line #")
+        except:
+            print("Failed to go to line #")
+
+    def bottom_line_kb(self, event):
+        try:
+            # set insertion position to inputted line #
+            print(self.tabs[self.get_tab()])
+            editor_text = self.tabs[self.get_tab()].text.get(1.0, "end-1c")
+            go_to_line_number = len(editor_text.split('\n'))
+            if go_to_line_number is not None:
+                self.see_line(go_to_line_number)
+            else:
+                print("Failed to go to line #")
+        except:
+            print("Failed to go to line #")
 
 # class TextLineNumbers(tk.Canvas):
 #     def __init__(self, *args, **kwargs):
