@@ -1,5 +1,5 @@
 # BitsAndPieces
-Lego Mindstorm
+Our project intends to help people with visual impairments to learn coding for the Lego Mindstorms EV3 Kits. This text editor works with the NVDA and JAWS screenreaders, and is designed to faciliate Python programming. 
 
 ### Software/Environment Requirements:
 * Python 3.x
